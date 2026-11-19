@@ -37,6 +37,62 @@ from tensorflow.python.platform import self_check
 # Perform pre-load sanity checks in order to produce a more actionable error.
 self_check.preload_check()
 
+# On native Windows CUDA builds, register CUDA/cuDNN/CUPTI DLL search dirs
+# before loading _pywrap_tensorflow_internal (Python 3.8+ ignores PATH).
+_WIN_CUDA_DLL_HANDLES = []
+if os.name == 'nt' and hasattr(os, 'add_dll_directory'):
+  _win_dll_candidates = []
+  for _dir in os.environ.get('TF_CUDA_DLL_DIRECTORIES', '').split(os.pathsep):
+    if _dir:
+      _win_dll_candidates.append(_dir)
+  for _var in ('LOCAL_CUDA_PATH', 'CUDA_PATH', 'CUDA_TOOLKIT_PATH'):
+    _root = os.environ.get(_var, '')
+    if _root:
+      _win_dll_candidates.extend([
+          os.path.join(_root, 'bin', 'x64'),
+          os.path.join(_root, 'bin'),
+          os.path.join(_root, 'lib', 'x64'),
+          os.path.join(_root, 'extras', 'CUPTI', 'lib64'),
+      ])
+  for _var in ('LOCAL_CUDNN_PATH', 'CUDNN_PATH'):
+    _root = os.environ.get(_var, '')
+    if _root:
+      _win_dll_candidates.extend([
+          os.path.join(_root, 'bin', 'x64'),
+          os.path.join(_root, 'bin'),
+          os.path.join(_root, 'lib', 'x64'),
+      ])
+  _win_dll_candidates.extend([
+      r'C:\tf\cuda\bin\x64',
+      r'C:\tf\cuda\bin',
+      r'C:\tf\cuda\lib\x64',
+      r'C:\tf\cudnn\bin\x64',
+      r'C:\tf\cudnn\bin',
+  ])
+  _seen_dirs = set()
+  _path_additions = []
+  _existing_path = {
+      os.path.normcase(os.path.normpath(p))
+      for p in os.environ.get('PATH', '').split(os.pathsep)
+      if p
+  }
+  for _d in _win_dll_candidates:
+    _norm = os.path.normpath(_d)
+    if _norm not in _seen_dirs and os.path.isdir(_norm):
+      _seen_dirs.add(_norm)
+      try:
+        _WIN_CUDA_DLL_HANDLES.append(os.add_dll_directory(_norm))
+      except OSError:
+        pass
+      if os.path.normcase(_norm) not in _existing_path:
+        _path_additions.append(_norm)
+  if _path_additions:
+    os.environ['PATH'] = (
+        os.pathsep.join(_path_additions)
+        + os.pathsep
+        + os.environ.get('PATH', '')
+    )
+
 # pylint: disable=wildcard-import,g-import-not-at-top,unused-import,line-too-long
 
 try:

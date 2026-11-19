@@ -1,0 +1,45 @@
+diff --git a/lib/Dialect/TritonGPU/Transforms/WarpSpecialization/PartitionLoops.cpp b/lib/Dialect/TritonGPU/Transforms/WarpSpecialization/PartitionLoops.cpp
+--- a/lib/Dialect/TritonGPU/Transforms/WarpSpecialization/PartitionLoops.cpp
++++ b/lib/Dialect/TritonGPU/Transforms/WarpSpecialization/PartitionLoops.cpp
+@@ -489,7 +489,7 @@
+     return success();
+ 
+   auto numPartitions = partitions.getNumPartitions();
+-  auto defaultPartition = partitions.getPartition((int)0);
++  auto defaultPartition = partitions.getPartition(0u);
+   auto loopVarCategories = classifyLoopVars(loop, defaultPartition, partitions);
+   auto [loopVarIndices, newResultIndices] =
+       getLoopVarIndicesToKeep(loop, defaultPartition, loopVarCategories);
+diff --git a/lib/Analysis/Utility.cpp b/lib/Analysis/Utility.cpp
+--- a/lib/Analysis/Utility.cpp
++++ b/lib/Analysis/Utility.cpp
+@@ -22,9 +22,9 @@
+ #include "llvm/ADT/SmallSet.h"
+ 
+-namespace mlir {
+-
+-using namespace triton;
+-using namespace triton::gpu;
++using namespace mlir::triton;
++using namespace mlir::triton::gpu;
++
++namespace mlir {
+ 
+ // Cases where distributed shared memory is not required in ConvertLayout:
+ // (1) numCTAs == 1
+diff --git a/lib/Dialect/TritonGPU/Transforms/Utility.cpp b/lib/Dialect/TritonGPU/Transforms/Utility.cpp
+--- a/lib/Dialect/TritonGPU/Transforms/Utility.cpp
++++ b/lib/Dialect/TritonGPU/Transforms/Utility.cpp
+@@ -24,9 +24,9 @@
+ namespace tt = mlir::triton;
+ namespace ttg = mlir::triton::gpu;
+ namespace ttng = mlir::triton::nvidia_gpu;
+-namespace mlir {
+-
+-using namespace triton;
++using namespace mlir::triton;
++
++namespace mlir {
+ 
+ SmallVector<unsigned, 3> mmaVersionToInstrShape(int version,
+                                                 const ArrayRef<int64_t> &shape,

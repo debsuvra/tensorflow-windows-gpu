@@ -43,8 +43,12 @@ absl::Status LoadDynamicLibrary(const char* library_filename, void** handle) {
 
   std::wstring ws_file_name(tsl::Utf8ToWideChar(file_name));
 
-  HMODULE hModule =
-      LoadLibraryExW(ws_file_name.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  HMODULE hModule = LoadLibraryExW(ws_file_name.c_str(), NULL,
+                                   LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  if (!hModule) {
+    hModule = LoadLibraryExW(ws_file_name.c_str(), NULL,
+                             LOAD_WITH_ALTERED_SEARCH_PATH);
+  }
   if (!hModule) {
     return absl::NotFoundError(file_name + " not found");
   }

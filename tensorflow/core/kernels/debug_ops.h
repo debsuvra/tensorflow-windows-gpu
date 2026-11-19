@@ -949,7 +949,7 @@ class DebugNumericSummaryV2Op<GPUDevice, Tin, Tout> : public AsyncOpKernel {
  private:
   int tensor_debug_mode_;
   int64_t tensor_id_;
-  static constexpr int64_t kMaxTensorId = 1L
+  static constexpr int64_t kMaxTensorId = int64_t{1}
                                           << std::numeric_limits<Tout>::digits;
 };
 

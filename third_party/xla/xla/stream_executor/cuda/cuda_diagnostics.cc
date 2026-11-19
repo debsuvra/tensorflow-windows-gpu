@@ -15,7 +15,9 @@ limitations under the License.
 
 #include "xla/stream_executor/cuda/cuda_diagnostics.h"
 
-#if !defined(PLATFORM_WINDOWS)
+#include "tsl/platform/platform.h"
+
+#if !defined(PLATFORM_WINDOWS) && !defined(_WIN32)
 #include <dirent.h>
 #endif
 

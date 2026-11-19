@@ -1,0 +1,181 @@
+# Remove root VERSION file (collides with C++20 <version> on case-insensitive Windows),
+# replace ISO 646 `not`/`and` with `!`/`&&` for MSVC, and bridge CUDA 13.5 CCCL 3.x cuda::mr APIs.
+diff --git a/VERSION b/VERSION
+deleted file mode 100644
+--- a/VERSION
++++ /dev/null
+@@ -1 +0,0 @@
+-25.08.00
+diff --git a/cpp/src/cuda_stream_view.cpp b/cpp/src/cuda_stream_view.cpp
+--- a/cpp/src/cuda_stream_view.cpp
++++ b/cpp/src/cuda_stream_view.cpp
+@@ -62,7 +62,7 @@
+ 
+ bool operator==(cuda_stream_view lhs, cuda_stream_view rhs) { return lhs.value() == rhs.value(); }
+ 
+-bool operator!=(cuda_stream_view lhs, cuda_stream_view rhs) { return not(lhs == rhs); }
++bool operator!=(cuda_stream_view lhs, cuda_stream_view rhs) { return !(lhs == rhs); }
+ 
+ std::ostream& operator<<(std::ostream& os, cuda_stream_view stream)
+ {
+diff --git a/cpp/include/rmm/mr/device/detail/coalescing_free_list.hpp b/cpp/include/rmm/mr/device/detail/coalescing_free_list.hpp
+--- a/cpp/include/rmm/mr/device/detail/coalescing_free_list.hpp
++++ b/cpp/include/rmm/mr/device/detail/coalescing_free_list.hpp
+@@ -102,7 +102,7 @@
+   [[nodiscard]] inline bool is_contiguous_before(block const& blk) const noexcept
+   {
+     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+-    return (pointer() + size() == blk.ptr) and not(blk.is_head());
++    return (pointer() + size() == blk.ptr) && !(blk.is_head());
+   }
+ 
+   /**
+diff --git a/cpp/include/rmm/mr/device/device_memory_resource.hpp b/cpp/include/rmm/mr/device/device_memory_resource.hpp
+--- a/cpp/include/rmm/mr/device/device_memory_resource.hpp
++++ b/cpp/include/rmm/mr/device/device_memory_resource.hpp
+@@ -275,7 +275,27 @@
+   void deallocate_async(void* ptr, std::size_t bytes, cuda_stream_view stream)
+   {
+     RMM_FUNC_RANGE();
+     do_deallocate(ptr, bytes, stream);
+   }
+ 
++  void* allocate_sync(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
++  {
++    return allocate(bytes, alignment);
++  }
++
++  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
++  {
++    deallocate(ptr, bytes, alignment);
++  }
++
++  void* allocate(cuda::stream_ref stream, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
++  {
++    return allocate_async(bytes, alignment, cuda_stream_view{stream});
++  }
++
++  void deallocate(cuda::stream_ref stream, void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
++  {
++    deallocate_async(ptr, bytes, alignment, cuda_stream_view{stream});
++  }
++
+   /**
+@@ -356,7 +376,7 @@
+     return this == &other;
+   }
+ };
+-static_assert(cuda::mr::async_resource_with<device_memory_resource, cuda::mr::device_accessible>);
++static_assert(cuda::mr::resource_with<device_memory_resource, cuda::mr::device_accessible>);
+ /** @} */  // end of group
+ }  // namespace mr
+ }  // namespace RMM_NAMESPACE
+diff --git a/cpp/include/rmm/resource_ref.hpp b/cpp/include/rmm/resource_ref.hpp
+--- a/cpp/include/rmm/resource_ref.hpp
++++ b/cpp/include/rmm/resource_ref.hpp
+@@ -29,40 +29,88 @@
+ 
++namespace detail {
++template <class... Properties>
++class compat_async_resource_ref {
++  struct vtable {
++    void* (*alloc_sync)(void*, std::size_t, std::size_t);
++    void (*dealloc_sync)(void*, void*, std::size_t, std::size_t);
++    void* (*alloc_async)(void*, cuda::stream_ref, std::size_t, std::size_t);
++    void (*dealloc_async)(void*, cuda::stream_ref, void*, std::size_t, std::size_t);
++    bool (*equal)(void const*, void const*);
++  };
++  template <class Resource>
++  static vtable const* get_vtable() noexcept {
++    static constexpr vtable vt{
++      [](void* o, std::size_t b, std::size_t a) -> void* { return static_cast<Resource*>(o)->allocate_sync(b, a); },
++      [](void* o, void* p, std::size_t b, std::size_t a) { static_cast<Resource*>(o)->deallocate_sync(p, b, a); },
++      [](void* o, cuda::stream_ref s, std::size_t b, std::size_t a) -> void* { return static_cast<Resource*>(o)->allocate(s, b, a); },
++      [](void* o, cuda::stream_ref s, void* p, std::size_t b, std::size_t a) { static_cast<Resource*>(o)->deallocate(s, p, b, a); },
++      [](void const* a, void const* b) -> bool { return *static_cast<Resource const*>(a) == *static_cast<Resource const*>(b); },
++    };
++    return &vt;
++  }
++  void* obj_{nullptr};
++  vtable const* vt_{nullptr};
++ public:
++  compat_async_resource_ref() = default;
++  compat_async_resource_ref(compat_async_resource_ref const&) noexcept = default;
++  compat_async_resource_ref& operator=(compat_async_resource_ref const&) noexcept = default;
++  template <class Resource, cuda::std::enable_if_t<!cuda::std::is_same_v<cuda::std::decay_t<Resource>, compat_async_resource_ref> && cuda::mr::resource_with<Resource, Properties...>, int> = 0>
++  compat_async_resource_ref(Resource& res) noexcept : obj_(const_cast<void*>(static_cast<void const*>(&res))), vt_(get_vtable<Resource>()) {}
++  template <class Resource, cuda::std::enable_if_t<cuda::mr::resource_with<Resource, Properties...>, int> = 0>
++  compat_async_resource_ref(Resource* res) noexcept : obj_(const_cast<void*>(static_cast<void const*>(res))), vt_(get_vtable<Resource>()) {}
++  void* allocate_sync(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) { return vt_->alloc_sync(obj_, bytes, alignment); }
++  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) noexcept { vt_->dealloc_sync(obj_, ptr, bytes, alignment); }
++  void* allocate(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) { return vt_->alloc_sync(obj_, bytes, alignment); }
++  void deallocate(void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) noexcept { vt_->dealloc_sync(obj_, ptr, bytes, alignment); }
++  void* allocate(cuda::stream_ref stream, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) { return vt_->alloc_async(obj_, stream, bytes, alignment); }
++  void deallocate(cuda::stream_ref stream, void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t)) noexcept { vt_->dealloc_async(obj_, stream, ptr, bytes, alignment); }
++  void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream) { return vt_->alloc_async(obj_, stream, bytes, alignment); }
++  void* allocate_async(std::size_t bytes, cuda::stream_ref stream) { return vt_->alloc_async(obj_, stream, bytes, alignof(std::max_align_t)); }
++  void deallocate_async(void* ptr, std::size_t bytes, std::size_t alignment, cuda::stream_ref stream) noexcept { vt_->dealloc_async(obj_, stream, ptr, bytes, alignment); }
++  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept { vt_->dealloc_async(obj_, stream, ptr, bytes, alignof(std::max_align_t)); }
++  friend bool operator==(compat_async_resource_ref const& lhs, compat_async_resource_ref const& rhs) noexcept { return lhs.obj_ == rhs.obj_ || (lhs.vt_ == rhs.vt_ && lhs.vt_ != nullptr && lhs.vt_->equal(lhs.obj_, rhs.obj_)); }
++  friend bool operator!=(compat_async_resource_ref const& lhs, compat_async_resource_ref const& rhs) noexcept { return !(lhs == rhs); }
++  template <class Prop, cuda::std::enable_if_t<(cuda::std::is_same_v<Prop, Properties> || ...), int> = 0>
++  friend void get_property(compat_async_resource_ref const&, Prop) noexcept {}
++};
++}  // namespace detail
++
+ /**
+  * @brief Alias for a `cuda::mr::resource_ref` with the property
+  * `cuda::mr::device_accessible`.
+  */
+-using device_resource_ref = cuda::mr::resource_ref<cuda::mr::device_accessible>;
++using device_resource_ref = cuda::mr::synchronous_resource_ref<cuda::mr::device_accessible>;
+ 
+ /**
+  * @brief Alias for a `cuda::mr::async_resource_ref` with the property
+  * `cuda::mr::device_accessible`.
+  */
+-using device_async_resource_ref = cuda::mr::async_resource_ref<cuda::mr::device_accessible>;
++using device_async_resource_ref = detail::compat_async_resource_ref<cuda::mr::device_accessible>;
+ 
+ /**
+  * @brief Alias for a `cuda::mr::resource_ref` with the property
+  * `cuda::mr::host_accessible`.
+  */
+-using host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible>;
++using host_resource_ref = cuda::mr::synchronous_resource_ref<cuda::mr::host_accessible>;
+ 
+ /**
+  * @brief Alias for a `cuda::mr::async_resource_ref` with the property
+  * `cuda::mr::host_accessible`.
+  */
+-using host_async_resource_ref = cuda::mr::async_resource_ref<cuda::mr::host_accessible>;
++using host_async_resource_ref = detail::compat_async_resource_ref<cuda::mr::host_accessible>;
+ 
+ /**
+  * @brief Alias for a `cuda::mr::resource_ref` with the properties
+  * `cuda::mr::host_accessible` and `cuda::mr::device_accessible`.
+  */
+ using host_device_resource_ref =
+-  cuda::mr::resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>;
++  cuda::mr::synchronous_resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>;
+ 
+ /**
+  * @brief Alias for a `cuda::mr::async_resource_ref` with the properties
+  * `cuda::mr::host_accessible` and `cuda::mr::device_accessible`.
+  */
+ using host_device_async_resource_ref =
+-  cuda::mr::async_resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>;
++  detail::compat_async_resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>;
+ 
+ /**
+diff --git a/cpp/include/rmm/mr/device/pool_memory_resource.hpp b/cpp/include/rmm/mr/device/pool_memory_resource.hpp
+--- a/cpp/include/rmm/mr/device/pool_memory_resource.hpp
++++ b/cpp/include/rmm/mr/device/pool_memory_resource.hpp
+@@ -179,6 +179,6 @@
+    */
+   template <typename Upstream2                                               = Upstream,
+-            cuda::std::enable_if_t<cuda::mr::async_resource<Upstream2>, int> = 0>
++            cuda::std::enable_if_t<cuda::mr::resource<Upstream2>, int> = 0>
+   explicit pool_memory_resource(Upstream2& upstream_mr,
+                                 std::size_t initial_pool_size,
+                                 std::optional<std::size_t> maximum_pool_size = std::nullopt)

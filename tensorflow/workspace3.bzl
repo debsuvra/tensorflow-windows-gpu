@@ -80,6 +80,15 @@ def workspace():
     # Details: https://github.com/google-ml-infra/rules_ml_toolchain
     tf_http_archive(
         name = "rules_ml_toolchain",
+        link_files = {
+            "//third_party/rules_ml_toolchain_overrides:gpu/nvidia_common_rules.bzl": "gpu/nvidia_common_rules.bzl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/cuda/cuda_configure.bzl": "gpu/cuda/cuda_configure.bzl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/cuda/cuda_redist_versions.bzl": "gpu/cuda/cuda_redist_versions.bzl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/cuda/legacy/crosstool/BUILD.tpl": "gpu/cuda/legacy/crosstool/BUILD.tpl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/cuda/legacy/crosstool/cc_toolchain_config.bzl.tpl": "gpu/cuda/legacy/crosstool/cc_toolchain_config.bzl.tpl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/cuda/legacy/crosstool/windows/msvc_wrapper_for_nvcc.py.tpl": "gpu/cuda/legacy/crosstool/windows/msvc_wrapper_for_nvcc.py.tpl",
+            "//third_party/rules_ml_toolchain_overrides:gpu/nccl/nccl_redist_init_repository.bzl": "gpu/nccl/nccl_redist_init_repository.bzl",
+        },
         sha256 = "3b05687842427041c65d1bc2f4aeda3a3079557120f5be8c34690087a88c5de5",
         strip_prefix = "rules_ml_toolchain-2eddbc595cc0bbe650c2640204f66b14f015f1a8",
         urls = tf_mirror_urls(

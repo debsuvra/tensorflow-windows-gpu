@@ -14,12 +14,22 @@
 # ==============================================================================
 """Generates a Python module containing information about the build."""
 import argparse
+import importlib.util
+import os
 
 # cuda.cuda is only valid in OSS
 try:
   from cuda.cuda import cuda_config  # pylint: disable=g-import-not-at-top
 except ImportError:
   cuda_config = None
+  _cuda_cfg_path = os.path.join(
+      "external", "local_config_cuda", "cuda", "cuda", "cuda_config.py"
+  )
+  if os.path.isfile(_cuda_cfg_path):
+    _spec = importlib.util.spec_from_file_location("cuda_config", _cuda_cfg_path)
+    if _spec and _spec.loader:
+      cuda_config = importlib.util.module_from_spec(_spec)
+      _spec.loader.exec_module(cuda_config)
 
 # tensorrt.tensorrt is only valid in OSS
 try:
@@ -52,7 +62,12 @@ def write_build_info(filename, key_value_list):
     elif value.lower() == "false":
       build_info[key] = False
     else:
-      build_info[key] = value.format(**build_info)
+      formatted = value.format(**build_info)
+      if key == "cudart_dll_name" and "cuda_version" in build_info:
+        formatted = "cudart64_%s.dll" % build_info["cuda_version"].split(".")[0]
+      elif key == "cudnn_dll_name" and "cudnn_version" in build_info:
+        formatted = "cudnn64_%s.dll" % build_info["cudnn_version"].split(".")[0]
+      build_info[key] = formatted
 
   # Sort the build info to ensure deterministic output.
   sorted_build_info_pairs = sorted(build_info.items())

@@ -109,15 +109,17 @@ struct DividesBy<std::complex<float>> {
 
 template <>
 struct DividesBy<std::complex<double>> {
-  cuDoubleComplex divisor;
+  double divisor_real;
+  double divisor_imag;
 
   __host__ __device__ explicit DividesBy(std::complex<double> divisor)
-      : divisor(make_cuDoubleComplex(divisor.real(), divisor.imag())) {}
+      : divisor_real(divisor.real()), divisor_imag(divisor.imag()) {}
 
   // implements
   __host__ __device__ std::complex<double> operator()(
       const std::complex<double>& x) const {
-    auto result = cuCdiv(make_cuDoubleComplex(x.real(), x.imag()), divisor);
+    auto result = cuCdiv(make_cuDoubleComplex(x.real(), x.imag()),
+                         make_cuDoubleComplex(divisor_real, divisor_imag));
     return std::complex<double>(result.x, result.y);
   }
 };
@@ -389,7 +391,8 @@ __global__ __launch_bounds__(1024) void ColumnReduceKernel(
     //  -         =
     //            =
     const int numRowsThisBlock =
-        min(static_cast<int>(blockDim.y), num_rows - blockIdx.y * blockDim.y);
+        min(static_cast<int>(blockDim.y),
+            num_rows - static_cast<int>(blockIdx.y * blockDim.y));
 
     for (int row = 1; row < numRowsThisBlock; ++row) {
       value_type t = partial_sums[threadIdx.x * (TF_RED_WARPSIZE + 1) + row];

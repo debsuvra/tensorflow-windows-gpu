@@ -29,7 +29,10 @@ def tensorflow_repo():
         strip_prefix = "rapids-logger-{version}".format(version = RAPIDS_LOGGER_VERSION),
         urls = tf_mirror_urls("https://github.com/rapidsai/rapids-logger/archive/refs/tags/v{version}.tar.gz".format(version = RAPIDS_LOGGER_VERSION)),
         build_file = "//third_party/rapids_logger:rapids_logger.BUILD",
-        patch_file = ["//third_party/rapids_logger:smoke_test.cc.patch"],
+        patch_file = [
+            "//third_party/rapids_logger:smoke_test.cc.patch",
+            "//third_party/rapids_logger:windows_fixes.patch",
+        ],
     )
 
 def xla_repo():

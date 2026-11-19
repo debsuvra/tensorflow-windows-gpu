@@ -141,10 +141,11 @@ absl::Status CubThreadScanDispatch(const T* d_in, T* d_out, int64_t row_length,
       reinterpret_cast<const void*>(kernel),
       cudaFuncAttributeMaxDynamicSharedMemorySize, shared_mem_bytes)));
   int grid_size = (column_length + block_size - 1) / block_size;
-  cudaLaunchConfig_t config = {.gridDim = grid_size,
-                               .blockDim = block_size,
-                               .dynamicSmemBytes = shared_mem_bytes,
-                               .stream = stream};
+  cudaLaunchConfig_t config = {};
+  config.gridDim = static_cast<unsigned int>(grid_size);
+  config.blockDim = static_cast<unsigned int>(block_size);
+  config.dynamicSmemBytes = shared_mem_bytes;
+  config.stream = stream;
   return ToStatus(cudaLaunchKernelEx(&config, kernel, d_in, d_out,
                                      column_length, row_length));
 }
@@ -190,8 +191,10 @@ absl::Status CubScanDispatch(void* d_temp_storage, size_t* temp_bytes,
   ABSL_RETURN_IF_ERROR(ToStatus(cuFuncGetAttribute(
       &block_size, CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, function)));
 
-  cudaLaunchConfig_t config = {
-      .gridDim = column_length, .blockDim = block_size, .stream = stream};
+  cudaLaunchConfig_t config = {};
+  config.gridDim = static_cast<unsigned int>(column_length);
+  config.blockDim = static_cast<unsigned int>(block_size);
+  config.stream = stream;
   return ToStatus(cudaLaunchKernelEx(&config, kernel, d_in, d_out, row_length));
 }
 

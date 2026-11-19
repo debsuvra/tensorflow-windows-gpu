@@ -100,7 +100,11 @@ absl::StatusOr<CudaDeviceAllocator::Options> QueryDeviceAllocatorOptions(
   ABSL_ASSIGN_OR_RETURN(bool rdma, IsRdmaSupported(device));
   ABSL_ASSIGN_OR_RETURN(bool fabric, IsFabricSupported(device));
 
+#ifdef _WIN32
+  bool posix_fd = false;
+#else
   bool posix_fd = true;
+#endif
   size_t granularity = 0;
 
   auto try_query = [&]() -> absl::Status {

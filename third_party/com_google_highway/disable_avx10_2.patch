@@ -1,0 +1,10 @@
+--- a/hwy/detect_targets.h
++++ b/hwy/detect_targets.h
+@@ -866,6 +866,6 @@
+ #define HWY_ATTAINABLE_TARGETS_X86                                    \
+   HWY_ENABLED(HWY_BASELINE_SCALAR | HWY_SSE2 | HWY_SSSE3 | HWY_SSE4 | \
+               HWY_AVX2 | HWY_AVX3 | HWY_AVX3_DL | HWY_AVX3_ZEN4 |     \
+-              HWY_AVX3_SPR | HWY_AVX10_2)
++              HWY_AVX3_SPR)
+ #endif  // !HWY_COMPILER_MSVC
+ #endif  // HWY_ATTAINABLE_TARGETS_X86

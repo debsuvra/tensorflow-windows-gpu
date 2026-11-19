@@ -364,6 +364,7 @@ def _gen_kernel_library(
             )
 
             host_triple = select({
+                "@platforms//os:windows": "x86_64-pc-windows-msvc",
                 "@platforms//cpu:aarch64": "aarch64-unknown-linux-gnu",  # copybara:comment_replace "//third_party/bazel_platforms/cpu:aarch64": "aarch64-unknown-linux-gnu",
                 "//conditions:default": "x86_64-unknown-linux-gnu",
             })

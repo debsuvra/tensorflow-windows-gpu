@@ -48,6 +48,9 @@ limitations under the License.
 #include "tensorflow/core/util/gpu_kernel_helper.h"
 #include "tensorflow/core/util/transform_output_iterator.h"
 
+#if GOOGLE_CUDA
+#include <thrust/iterator/constant_iterator.h>
+#endif
 #if TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/rocm.h"
 #endif  // GOOGLE_CUDA

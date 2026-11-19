@@ -277,7 +277,7 @@ EXPORTS
  ?CreateMesh@Mesh@dtensor@tensorflow@@SA?AV123@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@5@AEBV?$vector@_JV?$allocator@_J@std@@@5@2121_N@Z
  ?CreateRecordReaderOptions@RecordReaderOptions@io@tsl@@SA?AU123@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
  ?CreateRecordWriterOptions@RecordWriterOptions@io@tsl@@SA?AU123@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
- ?CreateStatusAndConditionallyLog@StatusBuilder@lts_20260526@absl@@CA?AVStatus@23@VSourceLocation@23@V?$unique_ptr@URep@StatusBuilder@lts_20260526@absl@@U?$default_delete@URep@StatusBuilder@lts_20260526@absl@@@std@@@std@@@Z
+ ?CreateStatusAndConditionallyLog@StatusBuilder@lts_20260526@absl@@CA?AVStatus@23@VSourceLocation@23@V?$unique_ptr@URep@StatusBuilder@lts_20260526@absl@@U?$default_delete@URep@StatusBuilder@lts_20260526@absl@@@std@@@std@@@Z=.weak.?CreateStatusAndConditionallyLog@StatusBuilder@lts_20260526@absl@@CA?AVStatus@23@VSourceLocation@23@V?$unique_ptr@URep@StatusBuilder@lts_20260526@absl@@U?$default_delete@URep@StatusBuilder@lts_20260526@absl@@@std@@@std@@@Z.default.?Destroy@StatusBuilder@lts_20260526@absl@@CAXV?$unique_ptr@URep@StatusBuilder@lts_20260526@absl@@U?$default_delete@URep@StatusBuilder@lts_20260526@absl@@@std@@@std@@@Z
  ?CtxFailure@OpKernelConstruction@tensorflow@@QEAAXPEBDHAEBVStatus@lts_20260526@absl@@@Z
  ?CtxFailure@OpKernelContext@tensorflow@@QEAAXPEBDHAEBVStatus@lts_20260526@absl@@@Z
  ?CtxFailureWithWarning@OpKernelConstruction@tensorflow@@QEAAXPEBDHAEBVStatus@lts_20260526@absl@@@Z
@@ -869,4 +869,22 @@ EXPORTS
  ?versions@Graph@tensorflow@@QEBAAEBVVersionDef@2@XZ
  TF_CreateFunction
  TF_SetTracingImplementation
+ ??$Set@$$V@ArenaStringPtr@internal@protobuf@google@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@PEAVArena@23@@Z
+ ??0MixingHashState@hash_internal@lts_20260526@absl@@AEAA@_K@Z
+ ?AllocateFromStringBlock@ThreadSafeArena@internal@protobuf@google@@QEAAPEAXXZ
+ ?combine@?$HashStateBase@VMixingHashState@hash_internal@lts_20260526@absl@@@hash_internal@lts_20260526@absl@@SA?AVMixingHashState@234@V5234@@Z
+ ?combine_contiguous@MixingHashState@hash_internal@lts_20260526@absl@@SA?AV1234@V1234@PEBE_K@Z
+ ?combine_raw@MixingHashState@hash_internal@lts_20260526@absl@@CA?AV1234@V1234@_K@Z
+ ?DebugString@Message@protobuf@google@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+ ?FindFieldByName@Descriptor@protobuf@google@@QEBAPEBVFieldDescriptor@23@V?$basic_string_view@DU?$char_traits@D@std@@@std@@@Z
+ ?GetMetadata@Message@protobuf@google@@IEBA?AUMetadata@23@XZ
+ ?kCharNull@log_internal@lts_20260526@absl@@3V?$array@D$06@std@@B
+ ?kSeed@MixingHashState@hash_internal@lts_20260526@absl@@0QEBXEB
+ ?kSooControl@container_internal@lts_20260526@absl@@3QBW4ctrl_t@123@B
+ ?ParseFromArray@MessageLite@protobuf@google@@QEAA_NPEBXH@Z
+ ?ParseFromString@MessageLite@protobuf@google@@QEAA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@@Z
+ ?ParsePartialFromString@MessageLite@protobuf@google@@QEAA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@@Z
+ ?SerializeAsString@MessageLite@protobuf@google@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+ ?SerializeToString@MessageLite@protobuf@google@@QEBA_NPEAV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+ ?ValidateEnum@internal@protobuf@google@@YA_NHPEBI@Z
 ; go/keep-sorted end

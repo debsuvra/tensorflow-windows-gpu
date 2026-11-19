@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <stdlib.h>
 
+#include <initializer_list>
 #include <string>
 
 #include "absl/status/status.h"
@@ -75,6 +76,22 @@ absl::StatusOr<void*> GetDsoHandle(const std::string& name,
 }
 }  // namespace
 
+#if defined(PLATFORM_WINDOWS)
+absl::StatusOr<void*> GetWinCudaDsoHandle(
+    const std::string& name, absl::string_view primary_version,
+    std::initializer_list<absl::string_view> fallback_versions = {}) {
+  auto res = GetDsoHandle(name + "64_", primary_version);
+  if (res.ok()) return res;
+  for (auto ver : fallback_versions) {
+    auto fb = GetDsoHandle(name + "64_", ver);
+    if (fb.ok()) return fb;
+  }
+  auto legacy = GetDsoHandle(name, primary_version);
+  if (legacy.ok()) return legacy;
+  return res;
+}
+#endif
+
 namespace DsoLoader {
 absl::StatusOr<void*> GetCudaDriverDsoHandle() {
 #if defined(PLATFORM_WINDOWS)
@@ -91,47 +108,89 @@ absl::StatusOr<void*> GetCudaDriverDsoHandle() {
 }
 
 absl::StatusOr<void*> GetNvmlDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetDsoHandle("nvml", "");
+#else
   return GetDsoHandle("nvidia-ml", "1");
+#endif
 }
 
 absl::StatusOr<void*> GetNvrtcDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("nvrtc", "130_0", {GetCudaRtVersion(), "120_0"});
+#else
   return GetDsoHandle("nvrtc", GetCudaRtVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCudaRuntimeDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cudart", GetCudaRtVersion(), {"12"});
+#else
   return GetDsoHandle("cudart", GetCudaRtVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCublasDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cublas", GetCublasVersion(), {"12"});
+#else
   return GetDsoHandle("cublas", GetCublasVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCublasLtDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cublasLt", GetCublasVersion(), {"12"});
+#else
   return GetDsoHandle("cublasLt", GetCublasVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCufftDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cufft", GetCufftVersion(), {"12", "11"});
+#else
   return GetDsoHandle("cufft", GetCufftVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCusolverDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cusolver", GetCusolverVersion(), {"12", "11"});
+#else
   return GetDsoHandle("cusolver", GetCusolverVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCusparseDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cusparse", GetCusparseVersion(), {"12", "11"});
+#else
   return GetDsoHandle("cusparse", GetCusparseVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetCuptiDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  auto status_or_handle = GetWinCudaDsoHandle("cupti", GetCuptiVersion(), {"12"});
+  if (status_or_handle.ok()) return status_or_handle;
+  return GetDsoHandle("cupti", "");
+#else
   // Load specific version of CUPTI this is built.
   auto status_or_handle = GetDsoHandle("cupti", GetCuptiVersion());
   if (status_or_handle.ok()) return status_or_handle;
   // Load whatever libcupti.so user specified.
   return GetDsoHandle("cupti", "");
+#endif
 }
 
 absl::StatusOr<void*> GetCudnnDsoHandle() {
+#if defined(PLATFORM_WINDOWS)
+  return GetWinCudaDsoHandle("cudnn", GetCudnnVersion(), {"9", "8"});
+#else
   return GetDsoHandle("cudnn", GetCudnnVersion());
+#endif
 }
 
 absl::StatusOr<void*> GetNcclDsoHandle() {

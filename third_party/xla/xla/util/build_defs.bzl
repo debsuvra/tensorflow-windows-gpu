@@ -39,8 +39,9 @@ def _run_protoc_impl(ctx):
 
     proto_descriptor_sets = _descriptor_set_list(ctx.attr.deps, ctx.file.descriptor_set)
 
+    sep = ctx.configuration.host_path_separator
     descriptor_set_in = ("--descriptor_set_in=%s" %
-                         ":".join([file.path for file in proto_descriptor_sets]))
+                         sep.join([file.path for file in proto_descriptor_sets]))
 
     if len(ctx.outputs.outs) != 1:
         fail("Expected exactly one output")
@@ -50,6 +51,11 @@ def _run_protoc_impl(ctx):
         "--encode=%s" % ctx.attr.proto_name,
         "--deterministic_output",
         descriptor_set_in,
+    ]
+    shell_protoc_args = [
+        "--encode=%s" % ctx.attr.proto_name,
+        "--deterministic_output",
+        "'%s'" % descriptor_set_in,
     ]
     redirect = [
         "< %s" % ctx.file.src.path,
@@ -79,7 +85,7 @@ def _run_protoc_impl(ctx):
             outputs = ctx.outputs.outs,
             inputs = [ctx.file.src] + proto_descriptor_sets,
             tools = [ctx.executable._tool],
-            command = " ".join([ctx.executable._tool.path] + protoc_args + redirect),
+            command = " ".join([ctx.executable._tool.path] + shell_protoc_args + redirect),
             mnemonic = "ProtoDataCompiler",
             use_default_shell_env = False,
         )

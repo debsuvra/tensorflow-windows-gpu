@@ -38,6 +38,7 @@ def tensorflow_repo():
             "//third_party/raft:select_k_runner.hpp.patch",
             "//third_party/raft:select_k_runner.cu.cc.patch",
             "//third_party/raft:select_k_smoke_test.cu.cc.patch",
+            "//third_party/raft:windows_fixes.patch",
         ],
     )
 
@@ -59,5 +60,6 @@ def xla_repo():
             "//third_party/raft:select_k_runner.hpp.patch",
             "//third_party/raft:select_k_runner.cu.cc.patch",
             "//third_party/raft:select_k_smoke_test.cu.cc.patch",
+            "//third_party/raft:windows_fixes.patch",
         ],
     )

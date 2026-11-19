@@ -1290,7 +1290,7 @@ def main():
   if (environ_cp.get('TF_NEED_ROCM') == '1' and environ_cp.get('HIP_PLATFORM')):
     write_action_env_to_bazelrc('HIP_PLATFORM', environ_cp.get('HIP_PLATFORM'))
 
-  if is_windows():
+  if is_windows() and environ_cp.get('TF_ENABLE_WIN_CUDA') != '1':
     print('\nWARNING: Cannot build with CUDA support on Windows.\n'
           'Starting in TF 2.11, CUDA build is not supported for Windows. '
           'For using TensorFlow GPU on Windows, you will need to build/install '

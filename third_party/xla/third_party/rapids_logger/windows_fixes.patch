@@ -1,0 +1,23 @@
+# Remove root VERSION file (collides with C++20 <version> on case-insensitive Windows)
+# and guard GCC visibility attribute on Windows.
+diff --git a/VERSION b/VERSION
+deleted file mode 100644
+--- a/VERSION
++++ /dev/null
+@@ -1 +0,0 @@
+-0.1.0
+diff --git a/include/rapids_logger/logger.hpp b/include/rapids_logger/logger.hpp
+--- a/include/rapids_logger/logger.hpp
++++ b/include/rapids_logger/logger.hpp
+@@ -24,7 +24,11 @@
+ #include <type_traits>
+ #include <vector>
+ 
++#if defined(_WIN32)
++#define RAPIDS_LOGGER_EXPORT
++#else
+ #define RAPIDS_LOGGER_EXPORT __attribute__((visibility("default")))
++#endif
+ 
+ namespace rapids_logger {
+ 

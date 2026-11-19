@@ -179,7 +179,7 @@ inline absl::StatusOr<GpuLaunchConfig64> GetGpuLaunchConfig64(
                    d.maxGpuThreadsPerMultiProcessor(),
                virtual_thread_count);
   const int64_t thread_per_block =
-      std::min(1024L, static_cast<int64_t>(d.maxGpuThreadsPerBlock()));
+      std::min(int64_t{1024}, static_cast<int64_t>(d.maxGpuThreadsPerBlock()));
   const int64_t block_count =
       std::min(div_ceil(physical_thread_count, thread_per_block),
                static_cast<int64_t>(d.getNumGpuMultiProcessors()));

@@ -15,7 +15,11 @@ limitations under the License.
 
 #include "xla/stream_executor/cuda/cudnn_api_wrappers.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/resource.h>
+#endif
 
 #include <string>
 
@@ -79,6 +83,24 @@ absl::Status ToStatus(cudnnStatus_t status, absl::string_view detail) {
                    detail.empty() ? "" : absl::StrCat(":", detail)));
 }
 
+#ifdef _WIN32
+using CudnnGetPropertyFn = cudnnStatus_t (*)(libraryPropertyType, int*);
+static CudnnGetPropertyFn ResolveCudnnGetProperty() {
+  HMODULE mod = GetModuleHandleA("cudnn64_9.dll");
+  if (!mod) {
+    mod = LoadLibraryExA("cudnn64_9.dll", NULL,
+                         LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  }
+  if (!mod) {
+    mod = LoadLibraryA("cudnn64_9.dll");
+  }
+  if (!mod) {
+    return nullptr;
+  }
+  return reinterpret_cast<CudnnGetPropertyFn>(
+      GetProcAddress(mod, "cudnnGetProperty"));
+}
+#else
 // cudnnGetProperty is forward declared as a weak symbol such that XLA-internal
 // targets can depend on this wrapper library without linking the
 // cudnn_plugin. This is mainly relevant for unit tests that use the CUDA
@@ -86,6 +108,7 @@ absl::Status ToStatus(cudnnStatus_t status, absl::string_view detail) {
 // on cudnn.
 extern "C" [[gnu::weak]] cudnnStatus_t cudnnGetProperty(
     libraryPropertyType type, int* value);
+#endif
 
 static libraryPropertyType ToLibraryPropertyType(CudnnProperty type) {
   switch (type) {
@@ -99,6 +122,15 @@ static libraryPropertyType ToLibraryPropertyType(CudnnProperty type) {
 }
 
 absl::StatusOr<int> GetCudnnProperty(CudnnProperty type) {
+#ifdef _WIN32
+  auto fn = ResolveCudnnGetProperty();
+  if (!fn) {
+    return absl::NotFoundError("cuDNN is not linked into the application.");
+  }
+  int value{};
+  ABSL_RETURN_IF_ERROR(ToStatus(fn(ToLibraryPropertyType(type), &value)));
+  return value;
+#else
   if (!cudnnGetProperty) {
     return absl::NotFoundError("cuDNN is not linked into the application.");
   }
@@ -106,6 +138,7 @@ absl::StatusOr<int> GetCudnnProperty(CudnnProperty type) {
   ABSL_RETURN_IF_ERROR(
       ToStatus(cudnnGetProperty(ToLibraryPropertyType(type), &value)));
   return value;
+#endif
 }
 
 absl::StatusOr<SemanticVersion> GetLoadedCudnnVersion() {

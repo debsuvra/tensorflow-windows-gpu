@@ -90,6 +90,17 @@ std::vector<std::string> CandidateCudaRoots() {
   if (cuda_home) {
     roots.emplace_back(cuda_home);
   }
+#if defined(PLATFORM_WINDOWS)
+  const char* cuda_path = getenv("CUDA_PATH");
+  if (cuda_path && *cuda_path) {
+    roots.emplace_back(cuda_path);
+  }
+  const char* local_cuda_path = getenv("LOCAL_CUDA_PATH");
+  if (local_cuda_path && *local_cuda_path) {
+    roots.emplace_back(local_cuda_path);
+  }
+  roots.emplace_back(std::string("C:/tf/cuda"));
+#endif
   std::string cuda_toolkit_path = TF_CUDA_TOOLKIT_PATH;
   if (!cuda_toolkit_path.empty()) {
     roots.push_back(std::move(cuda_toolkit_path));

@@ -110,7 +110,7 @@ cuda_stub(
 )
 
 cc_library(
-    name = "cuda",  # buildifier: disable=duplicated-name
+    name = "cuda_stub",
     srcs = if_cuda_is_configured([
         "cuda_stub.cc",
         "cuda.tramp.S",
@@ -127,6 +127,12 @@ cc_library(
         "@tsl//tsl/platform:dso_loader",
         "@tsl//tsl/platform:load_library",
     ]),
+)
+
+alias(
+    name = "cuda",  # buildifier: disable=duplicated-name
+    actual = if_cuda_libs("@cuda_cudart//:cuda_driver", ":cuda_stub"),
+    visibility = ["//visibility:public"],
 )
 
 cuda_stub(
@@ -413,7 +419,7 @@ cuda_stub(
 )
 
 cc_library(
-    name = "nvshmem",  # buildifier: disable=duplicated-name
+    name = "nvshmem_tramp",
     srcs = if_cuda_is_configured([
         "nvshmem_stub.cc",
         "nvshmem.tramp.S",
@@ -434,8 +440,14 @@ cc_library(
 )
 
 alias(
+    name = "nvshmem",  # buildifier: disable=duplicated-name
+    actual = if_cuda_libs("@nvidia_nvshmem//:nvshmem", ":nvshmem_tramp"),
+    visibility = ["//visibility:public"],
+)
+
+alias(
     name = "nvshmem_stub",
-    actual = if_cuda_libs("@nvidia_nvshmem//:nvshmem", ":nvshmem"),
+    actual = if_cuda_libs("@nvidia_nvshmem//:nvshmem", ":nvshmem_tramp"),
     visibility = ["//visibility:public"],
 )
 
@@ -466,7 +478,7 @@ cc_library(
 
 alias(
     name = "nvml",  # buildifier: disable=duplicated-name
-    actual = ":nvml_stub",
+    actual = if_cuda_libs("@cuda_nvml//:nvml", ":nvml_stub"),
     visibility = ["//visibility:public"],
 )
 
@@ -497,6 +509,6 @@ cc_library(
 
 alias(
     name = "nvrtc",  # buildifier: disable=duplicated-name
-    actual = ":nvrtc_stub",
+    actual = if_cuda_libs("@cuda_nvrtc//:nvrtc", ":nvrtc_stub"),
     visibility = ["//visibility:public"],
 )

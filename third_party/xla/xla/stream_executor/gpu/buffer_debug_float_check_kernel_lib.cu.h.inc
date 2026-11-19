@@ -48,7 +48,9 @@ template <typename T>
 using Chunk = std::array<T, kElementsPerMemoryAccess<T>>;
 
 template <typename T>
-__device__ static constexpr T kInfinity = std::numeric_limits<T>::infinity();
+__device__ inline T GetInfinity() {
+  return std::numeric_limits<T>::infinity();
+}
 
 template <typename T>
 __device__ inline bool IsNan(T v) {
@@ -98,7 +100,7 @@ __device__ inline uint32_t WarpSubgroupReduceSum(uint32_t value,
 
 template <typename T>
 __device__ T WarpSubgroupReduceMin(T value, uint64_t subgroup_size) {
-  value = FiniteOr(value, kInfinity<T>);
+  value = FiniteOr(value, GetInfinity<T>());
 
   for (unsigned int offset = 1; offset < subgroup_size; offset <<= 1) {
     value = std::min(value, WarpShuffleDown(value, offset));
@@ -108,7 +110,7 @@ __device__ T WarpSubgroupReduceMin(T value, uint64_t subgroup_size) {
 
 template <typename T>
 __device__ T WarpSubgroupReduceMax(T value, uint64_t subgroup_size) {
-  value = FiniteOr(value, -kInfinity<T>);
+  value = FiniteOr(value, -GetInfinity<T>());
 
   for (unsigned int offset = 1; offset < subgroup_size; offset <<= 1) {
     value = std::max(value, WarpShuffleDown(value, offset));
@@ -166,8 +168,8 @@ __device__ inline FloatCheckResult BlockReduceResults(uint32_t tid,
     value.nan_count = 0;
     value.inf_count = 0;
     value.zero_count = 0;
-    value.min_value = kInfinity<double>;
-    value.max_value = -kInfinity<double>;
+    value.min_value = GetInfinity<double>();
+    value.max_value = -GetInfinity<double>();
   }
 
   return value;
@@ -209,8 +211,8 @@ __device__ FloatCheckResult CheckFloats(const T* input, uint64_t input_size,
       xla::RoundDownTo(block_input_size, kElementsPerMemoryAccess<T>);
 
   FloatCheckResult result{};
-  result.min_value = kInfinity<double>;
-  result.max_value = -kInfinity<double>;
+  result.min_value = GetInfinity<double>();
+  result.max_value = -GetInfinity<double>();
 
   for (uint64_t i = tid; i < input_chunks; i += kBlockSize) {
     Chunk<T> values = chunked_input[i];
@@ -219,10 +221,10 @@ __device__ FloatCheckResult CheckFloats(const T* input, uint64_t input_size,
       result.inf_count += IsInf(value);
       result.zero_count += IsZero(value);
       result.min_value = std::min(
-          result.min_value, static_cast<double>(FiniteOr(value, kInfinity<T>)));
+          result.min_value, static_cast<double>(FiniteOr(value, GetInfinity<T>())));
       result.max_value =
           std::max(result.max_value,
-                   static_cast<double>(FiniteOr(value, -kInfinity<T>)));
+                   static_cast<double>(FiniteOr(value, -GetInfinity<T>())));
     }
   }
 
@@ -234,10 +236,10 @@ __device__ FloatCheckResult CheckFloats(const T* input, uint64_t input_size,
       result.inf_count += IsInf(value);
       result.zero_count += IsZero(value);
       result.min_value = std::min(
-          result.min_value, static_cast<double>(FiniteOr(value, kInfinity<T>)));
+          result.min_value, static_cast<double>(FiniteOr(value, GetInfinity<T>())));
       result.max_value =
           std::max(result.max_value,
-                   static_cast<double>(FiniteOr(value, -kInfinity<T>)));
+                   static_cast<double>(FiniteOr(value, -GetInfinity<T>())));
     }
   }
 
@@ -250,8 +252,8 @@ __device__ inline FloatCheckResult ReduceResults(const FloatCheckResult* input,
   const auto [block_input, block_input_size] = GetBlockInput(input, input_size);
 
   FloatCheckResult result{};
-  result.min_value = kInfinity<double>;
-  result.max_value = -kInfinity<double>;
+  result.min_value = GetInfinity<double>();
+  result.max_value = -GetInfinity<double>();
 
   for (uint64_t i = tid; i < input_size; i += kBlockSize) {
     const FloatCheckResult value = block_input[i];

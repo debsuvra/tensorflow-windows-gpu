@@ -1,0 +1,239 @@
+# Remove root VERSION file (collides with C++20 <version> on case-insensitive Windows),
+# guard mdspan MSVC traditional-preprocessor macro expansion when /Zc:preprocessor is active,
+# guard POSIX <execinfo.h>, fix Windows LLP64 / ISO 646 issues in mdspan/vectorized/device_atomics,
+# and fix mdspan fold expressions / template requirements under nvcc+MSVC.
+diff --git a/VERSION b/VERSION
+deleted file mode 100644
+--- a/VERSION
++++ /dev/null
+@@ -1 +0,0 @@
+-25.08.00
+diff --git a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/macros.hpp b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/macros.hpp
+--- a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/macros.hpp
++++ b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/macros.hpp
+@@ -140,7 +140,7 @@
+ #endif
+ 
+ 
+-#if defined(_MDSPAN_COMPILER_MSVC)
++#if defined(_MDSPAN_COMPILER_MSVC) && (!defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL)
+ #  define MDSPAN_TEMPLATE_REQUIRES(...) \
+       MDSPAN_PP_CAT( \
+         MDSPAN_PP_CAT(MDSPAN_TEMPLATE_REQUIRES_, MDSPAN_PP_COUNT(__VA_ARGS__))\
+@@ -285,5 +285,6 @@
+ 
+ #ifdef _MDSPAN_USE_FOLD_EXPRESSIONS
+ #  define _MDSPAN_FOLD_AND(...) ((__VA_ARGS__) && ...)
++#  define _MDSPAN_FOLD_AND_RUNTIME(...) ((__VA_ARGS__) && ...)
+ #  define _MDSPAN_FOLD_AND_TEMPLATE(...) ((__VA_ARGS__) && ...)
+ #  define _MDSPAN_FOLD_OR(...) ((__VA_ARGS__) || ...)
+@@ -599,7 +600,8 @@
+ 
+ } // end namespace std
+ 
+-#  define _MDSPAN_FOLD_AND(...) std::__fold_compatibility_impl::__fold_right_and_impl((__VA_ARGS__)...)
++#  define _MDSPAN_FOLD_AND(...) (::std::conjunction_v<::std::bool_constant<(__VA_ARGS__)>...>)
++#  define _MDSPAN_FOLD_AND_RUNTIME(...) std::__fold_compatibility_impl::__fold_right_and_impl((__VA_ARGS__)...)
+ #  define _MDSPAN_FOLD_OR(...) std::__fold_compatibility_impl::__fold_right_or_impl((__VA_ARGS__)...)
+ #  define _MDSPAN_FOLD_ASSIGN_LEFT(INIT, ...) std::__fold_compatibility_impl::__fold_left_assign_impl(INIT, (__VA_ARGS__)...)
+ #  define _MDSPAN_FOLD_ASSIGN_RIGHT(PACK, ...) std::__fold_compatibility_impl::__fold_right_assign_impl((PACK)..., __VA_ARGS__)
+diff --git a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/config.hpp b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/config.hpp
+--- a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/config.hpp
++++ b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/config.hpp
+@@ -148,8 +148,9 @@
+ 
+ #ifndef _MDSPAN_USE_FOLD_EXPRESSIONS
+-#  if (defined(__cpp_fold_expressions) && __cpp_fold_expressions >= 201603L) \
+-          || (!defined(__cpp_fold_expressions) && MDSPAN_HAS_CXX_17)
++#  if !defined(_MDSPAN_COMPILER_MSVC) && \
++      ((defined(__cpp_fold_expressions) && __cpp_fold_expressions >= 201603L) \
++          || (!defined(__cpp_fold_expressions) && MDSPAN_HAS_CXX_17))
+ #    define _MDSPAN_USE_FOLD_EXPRESSIONS 1
+ #  endif
+ #endif
+ 
+diff --git a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/extents.hpp b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/extents.hpp
+--- a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/extents.hpp
++++ b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/extents.hpp
+@@ -94,6 +94,14 @@
+ ) noexcept { return { }; }
+ 
+ struct __extents_tag { };
++template <class S1, class S2>
++struct _is_compatible_extents : std::false_type { };
++template <size_t... E1, size_t... E2>
++struct _is_compatible_extents<std::integer_sequence<size_t, E1...>, std::integer_sequence<size_t, E2...>>
++  : decltype(_check_compatible_extents(
++      std::integral_constant<bool, sizeof...(E1) == sizeof...(E2)>{},
++      std::integer_sequence<size_t, E1...>{},
++      std::integer_sequence<size_t, E2...>{})) { };
+ 
+ } // end namespace detail
+ 
+@@ -158,8 +166,8 @@
+     std::experimental::extents<OtherIndexType, OtherExtents...> other,
+     true_type, index_sequence<Idxs...>
+   ) const noexcept {
+-    return _MDSPAN_FOLD_AND(
++    return _MDSPAN_FOLD_AND_RUNTIME(
+       (__storage().template __get_n<Idxs>() == other.__storage().template __get_n<Idxs>()) /* && ... */
+     );
+   }
+ 
+@@ -206,13 +214,10 @@
+   // Converting constructor
+   MDSPAN_TEMPLATE_REQUIRES(
+     class OtherIndexType, size_t... OtherExtents,
+     /* requires */ (
+-      /* multi-stage check to protect from invalid pack expansion when sizes don't match? */
+-      decltype(detail::_check_compatible_extents(
+-        std::integral_constant<bool, sizeof...(Extents) == sizeof...(OtherExtents)>{},
+-        std::integer_sequence<size_t, Extents...>{},
+-        std::integer_sequence<size_t, OtherExtents...>{}
+-      ))::value
++      detail::_is_compatible_extents<
++        std::integer_sequence<size_t, Extents...>,
++        std::integer_sequence<size_t, OtherExtents...>>::value
+     )
+   )
+   MDSPAN_INLINE_FUNCTION
+diff --git a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/layout_stride.hpp b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/layout_stride.hpp
+--- a/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/layout_stride.hpp
++++ b/cpp/include/raft/thirdparty/mdspan/include/experimental/__p0009_bits/layout_stride.hpp
+@@ -161,7 +161,7 @@
+       template <class OtherExtents>
+       MDSPAN_INLINE_FUNCTION
+       static constexpr bool _eq_impl(mapping const& self, mapping<OtherExtents> const& other) noexcept {
+-        return _MDSPAN_FOLD_AND((self.stride(Idxs) == other.stride(Idxs)) /* && ... */);
++        return _MDSPAN_FOLD_AND_RUNTIME((self.stride(Idxs) == other.stride(Idxs)) /* && ... */);
+       }
+       template <class OtherExtents>
+       MDSPAN_INLINE_FUNCTION
+diff --git a/cpp/include/raft/util/cudart_utils.hpp b/cpp/include/raft/util/cudart_utils.hpp
+--- a/cpp/include/raft/util/cudart_utils.hpp
++++ b/cpp/include/raft/util/cudart_utils.hpp
+@@ -25,7 +25,9 @@
+ #include <cuda_fp16.h>
+ #include <cuda_runtime_api.h>
+ 
++#if !defined(_WIN32)
+ #include <execinfo.h>
++#endif
+ 
+ #include <chrono>
+ #include <cstdio>
+diff --git a/cpp/include/raft/core/mdspan.hpp b/cpp/include/raft/core/mdspan.hpp
+--- a/cpp/include/raft/core/mdspan.hpp
++++ b/cpp/include/raft/core/mdspan.hpp
+@@ -48,7 +48,7 @@
+   static_assert(ByteAlignment % sizeof(ValueType) == 0 || sizeof(ValueType) % ByteAlignment == 0,
+                 "std::experimental::padding sizeof(ValueType) has to be multiple or "
+                 "divider of ByteAlignment.");
+-  static constexpr size_t value = std::max(ByteAlignment / sizeof(ValueType), 1ul);
++  static constexpr size_t value = std::max<size_t>(ByteAlignment / sizeof(ValueType), 1);
+ };
+ 
+ // alignment fixed to 128 bytes
+@@ -104,7 +104,7 @@
+ struct is_output_mdspan : std::false_type {};
+ template <typename T>
+ struct is_output_mdspan<T, std::void_t<decltype(__takes_an_mdspan_ptr(std::declval<T*>()))>>
+-  : std::bool_constant<not std::is_const_v<typename T::element_type>> {};
++  : std::bool_constant<!std::is_const_v<typename T::element_type>> {};
+ 
+ template <typename T>
+ using is_mdspan_t = is_mdspan<std::remove_const_t<T>>;
+@@ -214,7 +214,7 @@
+ template <typename IndexType, typename... Extents, typename = ensure_integral_extents<Extents...>>
+ constexpr auto make_extents(Extents... exts)
+ {
+-  return extents<IndexType, ((void)exts, dynamic_extent)...>{exts...};
++  return extents<IndexType, ((void)sizeof(Extents), dynamic_extent)...>{exts...};
+ }
+ 
+ /**
+diff --git a/cpp/include/raft/util/vectorized.cuh b/cpp/include/raft/util/vectorized.cuh
+--- a/cpp/include/raft/util/vectorized.cuh
++++ b/cpp/include/raft/util/vectorized.cuh
+@@ -225,14 +225,16 @@
+ struct IOType<uint64_t, 2> {
+   typedef uint4 Type;
+ };
++#if !defined(_WIN32)
+ template <>
+ struct IOType<unsigned long long, 1> {
+   typedef unsigned long long Type;
+ };
+ template <>
+ struct IOType<unsigned long long, 2> {
+   typedef uint4 Type;
+ };
++#endif
+ template <>
+ struct IOType<double, 1> {
+   typedef double Type;
+diff --git a/cpp/include/raft/util/device_atomics.cuh b/cpp/include/raft/util/device_atomics.cuh
+--- a/cpp/include/raft/util/device_atomics.cuh
++++ b/cpp/include/raft/util/device_atomics.cuh
+@@ -255,28 +255,30 @@
+ // Then, this computes as `unsigned long long int` with `atomicAdd`
+ // @sa https://en.wikipedia.org/wiki/Two%27s_complement
++#if !defined(_WIN32)
+ template <>
+ struct genericAtomicOperationImpl<long int, DeviceSum, 8> {
+   using T = long int;
+   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
+   {
+     using T_int = unsigned long long int;
+     static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+     T_int ret = atomicAdd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
+     return type_reinterpret<T, T_int>(ret);
+   }
+ };
+ 
+ template <>
+ struct genericAtomicOperationImpl<unsigned long int, DeviceSum, 8> {
+   using T = unsigned long int;
+   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
+   {
+     using T_int = unsigned long long int;
+     static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+     T_int ret = atomicAdd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
+     return type_reinterpret<T, T_int>(ret);
+   }
+ };
++#endif
+ 
+ // CUDA natively supports `unsigned long long int` for `atomicAdd`,
+ // but doesn't supports `long long int`.
+@@ -298,28 +300,30 @@
+ };
+ 
++#if !defined(_WIN32)
+ template <>
+ struct genericAtomicOperationImpl<unsigned long int, DeviceMin, 8> {
+   using T = unsigned long int;
+   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMin op)
+   {
+     using T_int = unsigned long long int;
+     static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+     T ret = atomicMin(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
+     return type_reinterpret<T, T_int>(ret);
+   }
+ };
+ 
+ template <>
+ struct genericAtomicOperationImpl<unsigned long int, DeviceMax, 8> {
+   using T = unsigned long int;
+   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMax op)
+   {
+     using T_int = unsigned long long int;
+     static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+     T ret = atomicMax(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
+     return type_reinterpret<T, T_int>(ret);
+   }
+ };
++#endif
+ 
+ template <typename T>
+ struct genericAtomicOperationImpl<T, DeviceAnd, 8> {

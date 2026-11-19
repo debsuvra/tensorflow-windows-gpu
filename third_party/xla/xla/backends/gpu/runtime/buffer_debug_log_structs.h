@@ -49,7 +49,7 @@ struct BufferDebugLogEntry {
 };
 
 // The struct layout must match on both host and device.
-static_assert(_Alignof(BufferDebugLogEntry) == _Alignof(uint32_t));
+static_assert(alignof(BufferDebugLogEntry) == alignof(uint32_t));
 static_assert(sizeof(BufferDebugLogEntry) == sizeof(uint32_t) * 2);
 static_assert(offsetof(BufferDebugLogEntry, entry_id) == 0);
 static_assert(offsetof(BufferDebugLogEntry, value) == sizeof(uint32_t));
@@ -74,7 +74,7 @@ struct FloatCheckResult {
 };
 
 // The struct layout must match on both host and device.
-static_assert(_Alignof(FloatCheckResult) == _Alignof(double));
+static_assert(alignof(FloatCheckResult) == alignof(double));
 static_assert(sizeof(FloatCheckResult) ==
               sizeof(uint32_t) * 4 + sizeof(double) * 2);
 static_assert(offsetof(FloatCheckResult, nan_count) == 0);
@@ -100,7 +100,7 @@ struct BufferDebugFloatCheckEntry {
 };
 
 // The struct layout must match on both host and device.
-static_assert(_Alignof(BufferDebugFloatCheckEntry) == _Alignof(double));
+static_assert(alignof(BufferDebugFloatCheckEntry) == alignof(double));
 static_assert(sizeof(BufferDebugFloatCheckEntry) ==
               sizeof(uint32_t) * 2 + sizeof(FloatCheckResult));
 static_assert(offsetof(BufferDebugFloatCheckEntry, entry_id) == 0);
@@ -116,7 +116,7 @@ struct BufferDebugLogHeader {
 };
 
 // The struct layout must match on both host and device.
-static_assert(_Alignof(BufferDebugLogHeader) == _Alignof(uint32_t));
+static_assert(alignof(BufferDebugLogHeader) == alignof(uint32_t));
 static_assert(sizeof(BufferDebugLogHeader) == sizeof(uint32_t) * 2);
 static_assert(offsetof(BufferDebugLogHeader, write_idx) == 0);
 static_assert(offsetof(BufferDebugLogHeader, capacity) == sizeof(uint32_t));

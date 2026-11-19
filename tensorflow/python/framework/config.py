@@ -477,11 +477,13 @@ def list_physical_devices(device_type=None):
       and device_type == 'GPU'
       and platform.system() == 'Windows'
   ):
-    logging.warning(
-        'TensorFlow GPU support is not available on native Windows for '
-        'TensorFlow >= 2.11. Even if CUDA/cuDNN are installed, GPU will '
-        'not be used. Please use WSL2 or the TensorFlow-DirectML plugin.'
-    )
+    from tensorflow.python.platform import build_info as _build_info  # pylint: disable=g-import-not-at-top
+    if not _build_info.build_info.get('is_cuda_build', False):
+      logging.warning(
+          'TensorFlow GPU support is not available on native Windows for '
+          'TensorFlow >= 2.11. Even if CUDA/cuDNN are installed, GPU will '
+          'not be used. Please use WSL2 or the TensorFlow-DirectML plugin.'
+      )
     _warned_windows_gpu = True
   return context.context().list_physical_devices(device_type)
 

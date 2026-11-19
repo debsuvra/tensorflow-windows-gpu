@@ -19,6 +19,7 @@ limitations under the License.
 #include "absl/base/casts.h"
 #include "Eigen/Core"
 #include "third_party/gpus/cuda/include/cuda/atomic"
+#include "third_party/gpus/cuda/include/cuda_bf16.h"
 #include "third_party/gpus/cuda/include/cuda_fp16.h"
 #include "xla/stream_executor/cuda/cuda_platform_id.h"
 #include "xla/stream_executor/gpu/buffer_debug_float_check_kernel.h"
@@ -45,14 +46,13 @@ namespace stream_executor::gpu {
 // - __nv_bfloat16 and Eigen::bfloat16 are bitwise identical
 // So we can get a constant this way.
 template <>
-__device__ constexpr __nv_bfloat16 kInfinity<__nv_bfloat16> =
-    absl::bit_cast<__nv_bfloat16>(kInfinity<Eigen::bfloat16>);
-// - __half lacks std::numeric_limits specialization, and Eigen::half is not a
-// literal type (non-constexpr constructors), so we construct infinity from raw
-// bits.
+__device__ inline __nv_bfloat16 GetInfinity<__nv_bfloat16>() {
+  return __ushort_as_bfloat16(uint16_t{0x7F80});
+}
 template <>
-__device__ constexpr __half kInfinity<__half> =
-    absl::bit_cast<__half>(uint16_t{0x7C00});
+__device__ inline __half GetInfinity<__half>() {
+  return __ushort_as_half(uint16_t{0x7C00});
+}
 
 template <>
 __device__ inline bool IsNan(__nv_bfloat16 v) {

@@ -741,7 +741,8 @@ class LiteralBase {
         static_assert(8 % bits_per_element == 0);
 
         constexpr auto cast = [](uint8_t x) -> NativeT {
-          if constexpr (primitive_util::IsFloatingPointType(primitive_type)) {
+          if constexpr (primitive_util::IsFloatingPointType(
+                            primitive_util::NativeToPrimitiveType<NativeT>())) {
             return Eigen::numext::bit_cast<NativeT>(x);
           }
           return static_cast<NativeT>(x);

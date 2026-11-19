@@ -1088,3 +1088,42 @@ common --java_runtime_version=remotejdk_21
 
 # Enabled flaky test attempts for release branch
 test --flaky_test_attempts=3
+
+# Native Windows CUDA 13.5 + cuDNN 9.28.1 + Hybrid clang-cl (Zen 5) + nvcc (Blackwell sm_120)
+common:win_cuda_5090_9950x --config=cuda
+common:win_cuda_5090_9950x --@local_config_cuda//:cuda_compiler=nvcc
+common:win_cuda_5090_9950x --@local_config_cuda//cuda:override_include_cuda_libs=true
+common:win_cuda_5090_9950x --config=nonccl
+common:win_cuda_5090_9950x --dynamic_mode=off
+common:win_cuda_5090_9950x --repo_env=HERMETIC_CUDA_VERSION="13.5.0"
+common:win_cuda_5090_9950x --repo_env=HERMETIC_CUDNN_VERSION="9.28.1"
+common:win_cuda_5090_9950x --repo_env=HERMETIC_CUDA_COMPUTE_CAPABILITIES="compute_120"
+common:win_cuda_5090_9950x --repo_env=LOCAL_CUDA_PATH="C:/tf/cuda"
+common:win_cuda_5090_9950x --repo_env=LOCAL_CUDNN_PATH="C:/tf/cudnn"
+common:win_cuda_5090_9950x --repo_env=TF_NEED_CUDA="1"
+common:win_cuda_5090_9950x --repo_env=CUDA_NVCC="1"
+common:win_cuda_5090_9950x --repo_env=TF_WIN_CUDA_CLANG="1"
+common:win_cuda_5090_9950x --repo_env=LLVM_PATH="C:/tf/llvm"
+common:win_cuda_5090_9950x --repo_env=HERMETIC_PYTHON_VERSION="3.13"
+common:win_cuda_5090_9950x --crosstool_top=@local_config_cuda//crosstool:toolchain
+common:win_cuda_5090_9950x --extra_toolchains=@local_config_cuda//crosstool:toolchain-windows-x86_64-clang-cl
+common:win_cuda_5090_9950x --extra_toolchains=@local_config_cuda//crosstool:toolchain-windows-x86_64
+common:win_cuda_5090_9950x --compiler=clang-cl
+common:win_cuda_5090_9950x --copt=/clang:-march=znver5
+common:win_cuda_5090_9950x --host_copt=/clang:-march=znver5
+common:win_cuda_5090_9950x --copt=/D__PRFCHWINTRIN_H
+common:win_cuda_5090_9950x --host_copt=/D__PRFCHWINTRIN_H
+common:win_cuda_5090_9950x --linkopt=/FORCE:MULTIPLE
+common:win_cuda_5090_9950x --host_linkopt=/FORCE:MULTIPLE
+common:win_cuda_5090_9950x --linkopt=/demangle:no
+common:win_cuda_5090_9950x --host_linkopt=/demangle:no
+common:win_cuda_5090_9950x --linkopt=/errorlimit:0
+common:win_cuda_5090_9950x --host_linkopt=/errorlimit:0
+common:win_cuda_5090_9950x --action_env=PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+common:win_cuda_5090_9950x --define=no_tensorflow_py_deps=true
+common:win_cuda_5090_9950x --define=protobuf_allow_msvc=true
+common:win_cuda_5090_9950x --define=xnn_enable_avx512vnnigfni=false
+common:win_cuda_5090_9950x --define=xnn_enable_avx512vnni=false
+common:win_cuda_5090_9950x --define=xnn_enable_avx512skx=false
+common:win_cuda_5090_9950x --jobs=12
+common:win_cuda_5090_9950x --local_resources=memory=HOST_RAM*.6

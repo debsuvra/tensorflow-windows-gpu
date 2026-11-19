@@ -1,0 +1,55 @@
+# Fix NVCC + MSVC host compiler compatibility issues with Abseil LTS 20260526.0
+diff --git a/absl/container/internal/raw_hash_map.h b/absl/container/internal/raw_hash_map.h
+--- a/absl/container/internal/raw_hash_map.h
++++ b/absl/container/internal/raw_hash_map.h
+@@ -57,9 +57,11 @@
+   using MappedConstReference = decltype(P::value(
+       std::addressof(std::declval<typename raw_hash_map::const_reference>())));
+ 
++ protected:
+   using Hash = typename raw_hash_map::raw_hash_set::hasher;
+   using Eq = typename raw_hash_map::raw_hash_set::key_equal;
+   using Alloc = typename raw_hash_map::raw_hash_set::allocator_type;
++ private:
+ 
+   template <class K>
+   using key_arg =
+diff --git a/absl/container/internal/raw_hash_set.h b/absl/container/internal/raw_hash_set.h
+--- a/absl/container/internal/raw_hash_set.h
++++ b/absl/container/internal/raw_hash_set.h
+@@ -2036,9 +2036,11 @@
+ template <class Policy, class... Params>
+ class raw_hash_set {
+   using PolicyTraits = hash_policy_traits<Policy>;
++ protected:
+   using Hash = GetFromListOr<typename Policy::DefaultHash, 0, Params...>;
+   using Eq = GetFromListOr<typename Policy::DefaultEq, 1, Params...>;
+   using Alloc = GetFromListOr<typename Policy::DefaultAlloc, 2, Params...>;
++ private:
+   using KeyArgImpl =
+       KeyArg<IsTransparent<Eq>::value && IsTransparent<Hash>::value>;
+ 
+diff --git a/absl/hash/hash.h b/absl/hash/hash.h
+--- a/absl/hash/hash.h
++++ b/absl/hash/hash.h
+@@ -368,7 +368,7 @@
+  private:
+   HashState() = default;
+ 
+-  friend class HashState::HashStateBase;
++  friend class hash_internal::HashStateBase<HashState>;
+   friend struct hash_internal::CombineRaw;
+ 
+   template <typename T>
+diff --git a/absl/hash/internal/hash.h b/absl/hash/internal/hash.h
+--- a/absl/hash/internal/hash.h
++++ b/absl/hash/internal/hash.h
+@@ -1425,7 +1425,7 @@
+   }
+ 
+  private:
+-  friend class MixingHashState::HashStateBase;
++  friend class HashStateBase<MixingHashState>;
+   template <typename H>
+   friend H absl::hash_internal::hash_weakly_mixed_integer(H,
+                                                           WeaklyMixedInteger);

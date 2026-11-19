@@ -24,5 +24,6 @@ directly contribute your changes to github.com/triton-lang/triton instead.
 
 oss_only_patch_list = [
     "//third_party/triton:oss_only/build_files.patch",
+    "//third_party/triton:oss_only/win_clang22.patch",
     # Add new patches just above this line
 ]
