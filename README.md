@@ -1,4 +1,8 @@
-# tensorflow-windows-gpu
+<div align="center">
+  <img src="docs/assets/banner.jpg" alt="tensorflow-windows-gpu — Native Windows CUDA Builds for TensorFlow 2.22" width="100%">
+</div>
+
+<h1 align="center">tensorflow-windows-gpu</h1>
 
 > **Unofficial native Windows GPU builds of TensorFlow (CUDA) — official native Windows GPU support ended after TensorFlow 2.10.**
 
@@ -18,27 +22,19 @@ This fork restores **full native Windows x86_64 CUDA GPU support** on top of mod
 
 ## Verified Native Windows GPU Execution
 
-Running directly on **Windows 11 x64 (no WSL2)** from a clean Python 3.13 virtual environment:
+Running directly on **Windows 11 x64 (no WSL2)** from a clean Python 3.13 virtual environment (`verify_gpu.py`):
 
-```text
-OS: Windows-11-10.0.26300-SP0
-Python: 3.13.15
-TensorFlow: 2.22.0-dev0+selfbuilt
-Built with CUDA: True
-GPUs: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
-GPU details: {'device_name': 'NVIDIA GeForce RTX 5090', 'compute_capability': (12, 0)}
-MatMul: /job:localhost/replica:0/task:0/device:GPU:0 (2048, 2048)
-XLA JIT: /job:localhost/replica:0/task:0/device:GPU:0 (512, 512)
-Training step 3 loss on /job:localhost/replica:0/task:0/device:GPU:0: 58.6182
-```
+<div align="center">
+  <img src="docs/assets/gpu-verification.png" alt="Native Windows 11 GPU verification output showing RTX 5090 detected, Eager MatMul, cuDNN 9 Conv2D, XLA JIT, Keras 3 training, and 223 TFLOPS FP16 throughput" width="820">
+</div>
 
 **8192 × 8192 MatMul throughput (RTX 5090, CUDA 13.5, cuDNN 9.28.1, native Windows 11):**
 
 | Precision | Mean Latency | Measured Throughput |
 | :--- | ---: | ---: |
-| `float32` | `9.56 ms` | **114.99 TFLOPS** |
-| `float16` | `4.90 ms` | **224.19 TFLOPS** |
-| `bfloat16` | `4.90 ms` | **224.29 TFLOPS** |
+| `float32` | `9.65 ms` | **113.96 TFLOPS** |
+| `float16` | `4.93 ms` | **223.25 TFLOPS** |
+| `bfloat16` | `4.94 ms` | **222.66 TFLOPS** |
 
 ---
 
