@@ -37,12 +37,14 @@ __device__ static constexpr uint64_t kWarpSize = 32;
 namespace stream_executor::gpu {
 
 template <>
-__device__ constexpr hip_bfloat16 kInfinity<hip_bfloat16> =
-    __builtin_bit_cast(hip_bfloat16, uint16_t{0x7F80});
+__device__ inline hip_bfloat16 GetInfinity<hip_bfloat16>() {
+  return __builtin_bit_cast(hip_bfloat16, uint16_t{0x7F80});
+}
 
 template <>
-__device__ constexpr _Float16 kInfinity<_Float16> =
-    __builtin_bit_cast(_Float16, uint16_t{0x7C00});
+__device__ inline _Float16 GetInfinity<_Float16>() {
+  return __builtin_bit_cast(_Float16, uint16_t{0x7C00});
+}
 
 template <>
 __device__ inline bool IsNan(hip_bfloat16 v) {

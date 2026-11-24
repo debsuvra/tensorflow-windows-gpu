@@ -47,8 +47,5 @@ def xla_repo():
         strip_prefix = "rmm-{version}".format(version = RMM_VERSION),
         urls = tf_mirror_urls("https://github.com/rapidsai/rmm/archive/refs/tags/v{version}.tar.gz".format(version = RMM_VERSION)),
         build_file = "//third_party/rmm:rmm.BUILD",
-        patch_file = [
-            "//third_party/rmm:logger_macros.hpp.patch",
-            "//third_party/rmm:windows_fixes.patch",
-        ],
+        patch_file = ["//third_party/rmm:logger_macros.hpp.patch"],
     )

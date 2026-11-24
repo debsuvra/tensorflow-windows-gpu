@@ -20,6 +20,7 @@ from argparse import ArgumentParser
 import locale
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,11 +31,32 @@ if hasattr(sys.stdout, 'reconfigure'):
 # Template values set by cuda_configure.bzl
 CPU_COMPILER = '%{cpu_compiler}'
 MSVC_CL_PATH = '%{msvc_cl_exe}'
+LLVM_ROOT = '%{llvm_root}'
 IS_CLANG_CL = ('clang-cl' in os.path.basename(CPU_COMPILER).lower())
 
 NVCC_PATH = '%{nvcc_path}'
 NVCC_VERSION = '%{cuda_version}'
 NVCC_TEMP_DIR = '%{nvcc_tmp_dir}'
+
+_LLVM_ROOT_NORM = (
+    os.path.normcase(os.path.normpath(LLVM_ROOT)) if LLVM_ROOT else ''
+)
+_LLVM_ROOT_PREFIX = (
+    (_LLVM_ROOT_NORM if _LLVM_ROOT_NORM.endswith(os.sep)
+     else _LLVM_ROOT_NORM + os.sep)
+    if _LLVM_ROOT_NORM else ''
+)
+
+
+def _IsUnderLlvmRoot(path):
+  """Returns True if path is inside the configured LLVM_ROOT directory."""
+  if not _LLVM_ROOT_NORM:
+    return False
+  norm_path = os.path.normcase(os.path.normpath(path.strip().strip('"')))
+  return (
+      norm_path == _LLVM_ROOT_NORM
+      or norm_path.startswith(_LLVM_ROOT_PREFIX)
+  )
 
 
 def ExpandParamFiles(argv):
@@ -102,16 +124,11 @@ def FilterForMsvcHost(argv):
       '/d2ReducedOptimizeHugeFunctions',
   )
   filtered = []
-  has_arch = False
   has_zc_preprocessor = False
   for arg in argv:
-    if arg.startswith('/clang:-march=znver5') or arg.startswith('/clang:-march=native'):
+    if arg.startswith('/clang:-march='):
       # Keep nvcc's MSVC host stub at baseline SSE2 so cudafe++ does not parse
-      # AVX2/AVX-512 intrinsics headers (clang-cl still compiles all host C++ with znver5).
-      continue
-    if arg.lower().startswith('/arch:'):
-      has_arch = True
-      filtered.append(arg)
+      # AVX2/AVX-512 intrinsics headers (clang-cl still compiles all host C++ with target arch).
       continue
     if arg == '/Zc:preprocessor':
       has_zc_preprocessor = True
@@ -200,31 +217,6 @@ def DecodeCompilerOutput(data):
   return data.decode('utf-8', errors='replace')
 
 
-def NormalizeShowIncludes(output):
-  """Translates localized MSVC /showIncludes lines for Bazel's parser."""
-  prefixes = (
-      'Note: including file:',
-  )
-  normalized = []
-  for line in output.splitlines(True):
-    newline = ''
-    body = line
-    if line.endswith('\r\n'):
-      body = line[:-2]
-      newline = '\r\n'
-    elif line.endswith('\n') or line.endswith('\r'):
-      body = line[:-1]
-      newline = line[-1]
-    stripped = body.lstrip()
-    leading = body[:len(body) - len(stripped)]
-    for prefix in prefixes:
-      if stripped.startswith(prefix):
-        body = leading + 'Note: including file:' + stripped[len(prefix):]
-        break
-    normalized.append(body + newline)
-  return ''.join(normalized)
-
-
 def EscapeMsvcResponseArg(arg):
   """Escapes macro string-literal quotes and spaces for response files."""
   if arg.startswith(('/D', '-D')):
@@ -255,7 +247,7 @@ def RunCompilerCommand(cmd, env=None):
       cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
   output, _ = proc.communicate()
   if output:
-    sys.stdout.write(NormalizeShowIncludes(DecodeCompilerOutput(output)))
+    sys.stdout.write(DecodeCompilerOutput(output))
     sys.stdout.flush()
   return proc.returncode
 
@@ -285,6 +277,18 @@ def GetNvccOptions(argv):
   return ([], leftover)
 
 
+def _QuoteNvccPath(path, always_quote=False):
+  """Normalizes and quotes a path for nvcc --options-file."""
+  clean = path.strip().strip('"').replace('\\', '/')
+  if re.match(r'^[A-Za-z]:/+$', clean):
+    clean = clean[:3]
+  elif clean != '/':
+    clean = clean.rstrip('/')
+  if always_quote or ' ' in clean or '\t' in clean:
+    return '"' + clean + '"'
+  return clean
+
+
 def InvokeNvcc(argv, log=False):
   """Invoke NVIDIA nvcc using MSVC cl.exe as host compiler for .cu/.cu.cc files."""
   src_files = [
@@ -297,7 +301,7 @@ def InvokeNvcc(argv, log=False):
   out_file = [f for f in argv if f.startswith('/Fo')]
   if len(out_file) != 1:
     raise RuntimeError('Please specify exactly one /Fo output file for cuda compilation.')
-  out = ['-o', out_file[0][len('/Fo'):]]
+  out = ['-o', _QuoteNvccPath(out_file[0][len('/Fo'):])]
 
   nvcc_compiler_options, argv = GetNvccOptions(argv)
 
@@ -307,7 +311,7 @@ def InvokeNvcc(argv, log=False):
     opt = ['-O2']
 
   include_options, argv = GetOptionValue(argv, '/I')
-  includes = ['-I "' + inc + '"' if ' ' in inc else '-I ' + inc for inc in include_options]
+  includes = ['-I ' + _QuoteNvccPath(inc) for inc in include_options]
 
   defines, argv = GetOptionValue(argv, '/D')
   defines = ['-D' + d for d in defines]
@@ -322,7 +326,10 @@ def InvokeNvcc(argv, log=False):
 
   nvccopts = ['-D_FORCE_INLINES']
   if MSVC_CL_PATH and os.path.exists(MSVC_CL_PATH):
-    nvccopts.append('--compiler-bindir="%s"' % os.path.dirname(MSVC_CL_PATH))
+    nvccopts.append(
+        '--compiler-bindir=' +
+        _QuoteNvccPath(os.path.dirname(MSVC_CL_PATH), always_quote=True)
+    )
 
   compute_capabilities, argv = GetOptionValue(argv, '--cuda-gpu-arch')
   for capability in compute_capabilities:
@@ -344,13 +351,13 @@ def InvokeNvcc(argv, log=False):
   if 'INCLUDE' in os.environ:
     for p in os.environ['INCLUDE'].split(';'):
       p = p.strip()
-      if p and 'llvm' not in p.lower():
-        nvccopts.append('--system-include="%s"' % p)
+      if p and not _IsUnderLlvmRoot(p):
+        nvccopts.append('--system-include=' + _QuoteNvccPath(p, always_quote=True))
   if 'LIB' in os.environ:
     for p in os.environ['LIB'].split(';'):
       p = p.strip()
-      if p and 'llvm' not in p.lower():
-        nvccopts.append('--library-path="%s"' % p)
+      if p and not _IsUnderLlvmRoot(p):
+        nvccopts.append('--library-path=' + _QuoteNvccPath(p, always_quote=True))
 
   nvccopts += nvcc_compiler_options
   nvccopts += undefines
@@ -359,34 +366,49 @@ def InvokeNvcc(argv, log=False):
   nvccopts += fatbin_options
   if host_compiler_options:
     nvccopts.append('--compiler-options=' + ','.join(host_compiler_options))
-  nvccopts += ['-x', 'cu'] + opt + includes + out + ['-c'] + src_files
+  nvccopts += (
+      ['-x', 'cu'] + opt + includes + out + ['-c'] +
+      [_QuoteNvccPath(f) for f in src_files]
+  )
 
   if os.path.isfile(NVCC_TEMP_DIR):
     os.remove(NVCC_TEMP_DIR)
   os.makedirs(NVCC_TEMP_DIR, exist_ok=True)
+  keep_temp = '--keep' in nvcc_compiler_options
   tempdir = tempfile.mkdtemp(dir=NVCC_TEMP_DIR)
-  nvccopts += ['--keep', '--keep-dir', tempdir]
-  nvccopts += ['--std c++17']
-  if log:
-    Log([NVCC_PATH] + nvccopts)
+  try:
+    if not keep_temp:
+      nvccopts.append('--keep')
+    if not any(
+        opt_flag == '--keep-dir' or opt_flag.startswith('--keep-dir=')
+        for opt_flag in nvcc_compiler_options
+    ):
+      nvccopts.append('--keep-dir=' + _QuoteNvccPath(tempdir, always_quote=True))
+    nvccopts += ['--std c++17']
+    if log:
+      Log([NVCC_PATH] + nvccopts)
 
-  optsfile = tempfile.NamedTemporaryFile(
-      mode='w', dir=tempdir, delete=False, encoding='utf-8')
-  optsfile.write('\n'.join(nvccopts))
-  optsfile.close()
+    with tempfile.NamedTemporaryFile(
+        mode='w', dir=tempdir, delete=False, encoding='utf-8') as optsfile:
+      optsfile.write('\n'.join(nvccopts))
+      optsfile_name = optsfile.name
 
-  nvcc_env = os.environ.copy()
-  if 'INCLUDE' in nvcc_env:
-    nvcc_env['INCLUDE'] = ';'.join(
-        p for p in nvcc_env['INCLUDE'].split(';')
-        if p.strip() and 'llvm' not in p.lower()
-    )
-  if 'LIB' in nvcc_env:
-    nvcc_env['LIB'] = ';'.join(
-        p for p in nvcc_env['LIB'].split(';')
-        if p.strip() and 'llvm' not in p.lower()
-    )
-  return RunCompilerCommand([NVCC_PATH, '--options-file', optsfile.name], env=nvcc_env)
+    nvcc_env = os.environ.copy()
+    if 'INCLUDE' in nvcc_env:
+      nvcc_env['INCLUDE'] = ';'.join(
+          p for p in nvcc_env['INCLUDE'].split(';')
+          if p.strip() and not _IsUnderLlvmRoot(p)
+      )
+    if 'LIB' in nvcc_env:
+      nvcc_env['LIB'] = ';'.join(
+          p for p in nvcc_env['LIB'].split(';')
+          if p.strip() and not _IsUnderLlvmRoot(p)
+      )
+    return RunCompilerCommand(
+        [NVCC_PATH, '--options-file', optsfile_name], env=nvcc_env)
+  finally:
+    if not keep_temp:
+      shutil.rmtree(tempdir, ignore_errors=True)
 
 
 def main():

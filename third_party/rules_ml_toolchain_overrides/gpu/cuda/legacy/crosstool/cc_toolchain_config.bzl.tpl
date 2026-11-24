@@ -926,28 +926,6 @@ def _features(cpu, compiler, ctx):
             ),
             feature(name = "static_link_msvcrt"),
             feature(
-                name = "static_link_msvcrt_no_debug",
-                requires = [
-                    feature_set(features = ["fastbuild"]),
-                    feature_set(features = ["opt"]),
-                ],
-            ),
-            feature(
-                name = "dynamic_link_msvcrt_no_debug",
-                requires = [
-                    feature_set(features = ["fastbuild"]),
-                    feature_set(features = ["opt"]),
-                ],
-            ),
-            feature(
-                name = "static_link_msvcrt_debug",
-                requires = [feature_set(features = ["dbg"])],
-            ),
-            feature(
-                name = "dynamic_link_msvcrt_debug",
-                requires = [feature_set(features = ["dbg"])],
-            ),
-            feature(
                 name = "dbg",
                 implies = ["generate_pdb_file"],
             ),

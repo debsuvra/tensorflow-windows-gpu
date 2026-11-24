@@ -325,14 +325,12 @@ absl::Status CSRSparseMatrixBatchMulVecImpl(OpKernelContext* ctx,
   return absl::OkStatus();
 }
 
-#define DEFINE_SPARSE_MUL_VEC_GPU(T)                                        \
-  template <>                                                               \
-  CSRSparseMatrixBatchMulVec<GPUDevice, T>::CSRSparseMatrixBatchMulVec() {} \
-  template <>                                                               \
-  Status CSRSparseMatrixBatchMulVec<GPUDevice, T>::Compute(                 \
-      OpKernelContext* ctx, const CSRSparseMatrix& a,                       \
-      typename TTypes<T>::ConstFlat b, CSRSparseMatrix* c) {                \
-    return CSRSparseMatrixBatchMulVecImpl<T>(ctx, a, b, c);                 \
+#define DEFINE_SPARSE_MUL_VEC_GPU(T)                         \
+  template <>                                                \
+  Status CSRSparseMatrixBatchMulVec<GPUDevice, T>::Compute(  \
+      OpKernelContext* ctx, const CSRSparseMatrix& a,        \
+      typename TTypes<T>::ConstFlat b, CSRSparseMatrix* c) { \
+    return CSRSparseMatrixBatchMulVecImpl<T>(ctx, a, b, c);  \
   }
 
 DEFINE_SPARSE_MUL_VEC_GPU(float);

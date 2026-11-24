@@ -335,10 +335,53 @@ def _create_windows_tool_bin(repository_ctx, cuda_root, tools):
         repository_ctx.file("bin/crt/.placeholder", "")
         repository_ctx.symlink("%s/bin/crt/link.stub" % cuda_root, "bin/crt/link.stub")
 
+def _version_sort_key(name):
+    parts = name.split(".")
+    if parts and all([p.isdigit() for p in parts]):
+        return (1, [int(p) for p in parts], name)
+    return (0, [], name)
+
+def _find_cudnn_windows_subdir(repository_ctx, base_dir, cuda_version, leaf_suffix = ""):
+    suffix = ("/" + leaf_suffix) if leaf_suffix else ""
+
+    # 1. Exact version prefixes (e.g. 13.5.0, 13.5, 13).
+    for version in _version_prefixes(cuda_version):
+        candidate = "%s/%s%s" % (base_dir, version, suffix)
+        if _path_exists(repository_ctx, candidate):
+            return candidate
+
+    # 2. Fallback to same-major versioned subdirs (e.g. cuDNN 9.x "13.0" for CUDA 13.5),
+    # picking the highest matching numeric version first.
+    base_path = repository_ctx.path(base_dir)
+    if base_path.exists:
+        cuda_major = cuda_version.split(".")[0] if cuda_version else ""
+        versioned_entries = []
+        for entry in base_path.readdir():
+            name = entry.basename
+            parts = name.split(".")
+            if not (parts and all([p.isdigit() for p in parts])):
+                continue
+            if cuda_major and parts[0] != cuda_major:
+                continue
+            versioned_entries.append(name)
+        for name in sorted(versioned_entries, key = _version_sort_key, reverse = True):
+            candidate = "%s/%s%s" % (base_dir, name, suffix)
+            if _path_exists(repository_ctx, candidate):
+                return candidate
+
+    # 3. Unversioned layout (<base>/<leaf_suffix>, then <base>).
+    if leaf_suffix:
+        candidate = "%s%s" % (base_dir, suffix)
+        if _path_exists(repository_ctx, candidate):
+            return candidate
+    if _path_exists(repository_ctx, base_dir):
+        return base_dir
+    return ""
+
 def _create_windows_local_tree(repository_ctx, local_path):
     repo_name = _get_orig_repo_name(repository_ctx)
     root = _norm_path(local_path)
-    cuda_version_candidates = _version_prefixes(get_cuda_version(repository_ctx))
+    cuda_version = get_cuda_version(repository_ctx)
 
     if repo_name == "cuda_cupti":
         include_path = _first_existing_path(repository_ctx, [
@@ -352,27 +395,23 @@ def _create_windows_local_tree(repository_ctx, local_path):
         ])
         bin_path = lib_path
     elif repo_name == "cuda_cudnn":
-        include_candidates = [
-            "%s/include/%s" % (root, version)
-            for version in cuda_version_candidates
-        ] + ["%s/include" % root]
-        lib_candidates = [
-            "%s/lib/%s/x64" % (root, version)
-            for version in cuda_version_candidates
-        ] + [
-            "%s/lib/x64" % root,
+        include_path = _find_cudnn_windows_subdir(
+            repository_ctx,
+            "%s/include" % root,
+            cuda_version,
+        )
+        lib_path = _find_cudnn_windows_subdir(
+            repository_ctx,
             "%s/lib" % root,
-        ]
-        bin_candidates = [
-            "%s/bin/%s/x64" % (root, version)
-            for version in cuda_version_candidates
-        ] + [
-            "%s/bin/x64" % root,
+            cuda_version,
+            "x64",
+        )
+        bin_path = _find_cudnn_windows_subdir(
+            repository_ctx,
             "%s/bin" % root,
-        ]
-        include_path = _first_existing_path(repository_ctx, include_candidates)
-        lib_path = _first_existing_path(repository_ctx, lib_candidates)
-        bin_path = _first_existing_path(repository_ctx, bin_candidates)
+            cuda_version,
+            "x64",
+        )
     else:
         include_path = _first_existing_path(repository_ctx, ["%s/include" % root])
         lib_path = _first_existing_path(repository_ctx, [
@@ -949,14 +988,30 @@ def _use_downloaded_redistribution(repository_ctx):
     _create_repository_symlinks(repository_ctx)
     create_version_file(repository_ctx, major_version)
 
+def _get_local_redist_path(repository_ctx, env_var):
+    local_redist_path = get_env_var(repository_ctx, env_var)
+    if not local_redist_path and _is_windows(repository_ctx):
+        if env_var == "LOCAL_CCCL_PATH":
+            local_redist_path = get_env_var(repository_ctx, "LOCAL_CUDA_PATH")
+        if not local_redist_path and get_env_var(repository_ctx, "TF_NEED_CUDA") == "1":
+            if env_var in ("LOCAL_CUDA_PATH", "LOCAL_CCCL_PATH"):
+                local_redist_path = (
+                    get_env_var(repository_ctx, "CUDA_PATH") or
+                    get_env_var(repository_ctx, "CUDA_TOOLKIT_PATH")
+                )
+            elif env_var == "LOCAL_CUDNN_PATH":
+                local_redist_path = get_env_var(repository_ctx, "CUDNN_PATH")
+    return local_redist_path
+
 def _redist_repo_impl(repository_ctx):
     if _is_windows(repository_ctx) and _get_orig_repo_name(repository_ctx) == "nvidia_nvshmem":
         repository_ctx.file("BUILD", 'cc_library(name = "nvshmem", visibility = ["//visibility:public"])\n')
         create_version_file(repository_ctx, "")
         return
-    local_redist_path = get_env_var(repository_ctx, repository_ctx.attr.local_path_env_var)
-    if not local_redist_path and _is_windows(repository_ctx) and repository_ctx.attr.local_path_env_var == "LOCAL_CCCL_PATH":
-        local_redist_path = get_env_var(repository_ctx, "LOCAL_CUDA_PATH")
+    local_redist_path = _get_local_redist_path(
+        repository_ctx,
+        repository_ctx.attr.local_path_env_var,
+    )
     if local_redist_path:
         use_local_redist_path(repository_ctx, local_redist_path, repository_ctx.attr.local_source_dirs)
     else:
@@ -986,7 +1041,20 @@ _redist_repo = repository_rule(
             allow_single_file = True,
         ),
     },
-    environ = ["HERMETIC_CUDA_VERSION", "TF_CUDA_VERSION", "HERMETIC_CUDNN_VERSION", "TF_CUDNN_VERSION", "LOCAL_CUDA_PATH", "LOCAL_CUDNN_PATH", "LOCAL_NVSHMEM_PATH"],
+    environ = [
+        "TF_NEED_CUDA",
+        "HERMETIC_CUDA_VERSION",
+        "TF_CUDA_VERSION",
+        "HERMETIC_CUDNN_VERSION",
+        "TF_CUDNN_VERSION",
+        "LOCAL_CUDA_PATH",
+        "CUDA_PATH",
+        "CUDA_TOOLKIT_PATH",
+        "LOCAL_CUDNN_PATH",
+        "CUDNN_PATH",
+        "LOCAL_CCCL_PATH",
+        "LOCAL_NVSHMEM_PATH",
+    ],
 )
 
 def redist_init_repository(
@@ -1158,7 +1226,10 @@ def _redist_json_impl(repository_ctx):
         repository_ctx,
         repository_ctx.attr.redist_version_env_vars,
     )
-    local_redist_path = get_env_var(repository_ctx, repository_ctx.attr.local_path_env_var)
+    local_redist_path = _get_local_redist_path(
+        repository_ctx,
+        repository_ctx.attr.local_path_env_var,
+    )
     supported_redist_versions = repository_ctx.attr.json_dict.keys()
     if (redist_version and not local_redist_path and
         (redist_version not in supported_redist_versions)):
@@ -1217,6 +1288,20 @@ _redist_json = repository_rule(
         "local_path_env_var": attr.string(mandatory = True),
         "use_tar_file_env_var": attr.string(mandatory = True),
     },
+    environ = [
+        "TF_NEED_CUDA",
+        "HERMETIC_CUDA_VERSION",
+        "TF_CUDA_VERSION",
+        "HERMETIC_CUDNN_VERSION",
+        "TF_CUDNN_VERSION",
+        "LOCAL_CUDA_PATH",
+        "CUDA_PATH",
+        "CUDA_TOOLKIT_PATH",
+        "LOCAL_CUDNN_PATH",
+        "CUDNN_PATH",
+        "LOCAL_CCCL_PATH",
+        "LOCAL_NVSHMEM_PATH",
+    ],
 )
 
 def json_init_repository(

@@ -1,6 +1,6 @@
 # Remove root VERSION file (collides with C++20 <version> on case-insensitive Windows),
 # guard mdspan MSVC traditional-preprocessor macro expansion when /Zc:preprocessor is active,
-# guard POSIX <execinfo.h>, fix Windows LLP64 / ISO 646 issues in mdspan/vectorized/device_atomics,
+# guard POSIX <execinfo.h>, fix Windows LLP64 / ISO 646 issues in mdspan/mdbuffer/vectorized/device_atomics,
 # and fix mdspan fold expressions / template requirements under nvcc+MSVC.
 diff --git a/VERSION b/VERSION
 deleted file mode 100644
@@ -152,6 +152,18 @@ diff --git a/cpp/include/raft/core/mdspan.hpp b/cpp/include/raft/core/mdspan.hpp
  }
  
  /**
+diff --git a/cpp/include/raft/core/mdbuffer.cuh b/cpp/include/raft/core/mdbuffer.cuh
+--- a/cpp/include/raft/core/mdbuffer.cuh
++++ b/cpp/include/raft/core/mdbuffer.cuh
+@@ -968,7 +968,7 @@
+ struct is_output_mdbuffer : std::false_type {};
+ template <typename T>
+ struct is_output_mdbuffer<T, std::void_t<decltype(__takes_an_mdbuffer_ptr(std::declval<T*>()))>>
+-  : std::bool_constant<not std::is_const_v<typename T::element_type>> {};
++  : std::bool_constant<!std::is_const_v<typename T::element_type>> {};
+ 
+ template <typename T>
+ using is_mdbuffer_t = is_mdbuffer<std::remove_const_t<T>>;
 diff --git a/cpp/include/raft/util/vectorized.cuh b/cpp/include/raft/util/vectorized.cuh
 --- a/cpp/include/raft/util/vectorized.cuh
 +++ b/cpp/include/raft/util/vectorized.cuh

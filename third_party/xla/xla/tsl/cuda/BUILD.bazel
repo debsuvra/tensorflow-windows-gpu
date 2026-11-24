@@ -55,7 +55,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cublas.inc"],
+    textual_hdrs = if_cuda_is_configured(["cublas.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -87,7 +87,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cublasLt.inc"],
+    textual_hdrs = if_cuda_is_configured(["cublasLt.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -118,7 +118,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cuda.inc"],
+    textual_hdrs = if_cuda_is_configured(["cuda.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -158,7 +158,10 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cudart.inc"],
+    textual_hdrs = select({
+        "@xla//xla/tsl:is_cuda_enabled_and_oss": ["cudart.inc"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss": [
@@ -195,7 +198,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cudnn.inc"],
+    textual_hdrs = if_cuda_is_configured(["cudnn.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -250,7 +253,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cufft.inc"],
+    textual_hdrs = if_cuda_is_configured(["cufft.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -287,7 +290,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cupti.inc"],
+    textual_hdrs = if_cuda_is_configured(["cupti.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -324,7 +327,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cusolver.inc"],
+    textual_hdrs = if_cuda_is_configured(["cusolver.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -360,7 +363,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["cusparse.inc"],
+    textual_hdrs = if_cuda_is_configured(["cusparse.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -393,7 +396,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["nccl.inc"],
+    textual_hdrs = if_cuda_is_configured(["nccl.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -429,7 +432,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["nvshmem.inc"],
+    textual_hdrs = if_cuda_is_configured(["nvshmem.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -465,7 +468,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["nvml.inc"],
+    textual_hdrs = if_cuda_is_configured(["nvml.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted
@@ -496,7 +499,7 @@ cc_library(
     local_defines = [
         "IMPLIB_EXPORT_SHIMS=1",
     ],
-    textual_hdrs = ["nvrtc.inc"],
+    textual_hdrs = if_cuda_is_configured(["nvrtc.inc"]),
     visibility = ["//visibility:public"],
     deps = if_cuda_is_configured([
         # keep sorted

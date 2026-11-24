@@ -202,10 +202,28 @@ def _local_windows_cuda_include_paths(repository_ctx):
             _append_existing_path(repository_ctx, paths, "%s/include/cccl" % root)
             _append_existing_path(repository_ctx, paths, "%s/extras/CUPTI/include" % root)
 
-    cudnn_root = get_host_environ(repository_ctx, "LOCAL_CUDNN_PATH")
+    cudnn_root = (
+        get_host_environ(repository_ctx, "LOCAL_CUDNN_PATH") or
+        get_host_environ(repository_ctx, "CUDNN_PATH")
+    )
     if cudnn_root:
-        for version in _version_prefixes(get_cuda_version(repository_ctx)):
+        cuda_version = get_cuda_version(repository_ctx)
+        for version in _version_prefixes(cuda_version):
             _append_existing_path(repository_ctx, paths, "%s/include/%s" % (cudnn_root, version))
+        cudnn_inc_dir = repository_ctx.path(cudnn_root.replace("\\", "/").rstrip("/") + "/include")
+        if cudnn_inc_dir.exists:
+            cuda_major = cuda_version.split(".")[0] if cuda_version else ""
+            versioned_entries = []
+            for entry in cudnn_inc_dir.readdir():
+                name = entry.basename
+                parts = name.split(".")
+                if not (parts and all([p.isdigit() for p in parts])):
+                    continue
+                if cuda_major and parts[0] != cuda_major:
+                    continue
+                versioned_entries.append(entry)
+            for entry in sorted(versioned_entries, key = _clang_version_sort_key, reverse = True):
+                _append_existing_path(repository_ctx, paths, str(entry))
         _append_existing_path(repository_ctx, paths, "%s/include" % cudnn_root)
 
     return paths
@@ -219,27 +237,52 @@ def _get_msvc_compiler(repository_ctx):
         )
     return find_msvc_tool(repository_ctx, vc_path, "cl.exe").replace("\\", "/")
 
+def _extract_llvm_root_from_binary(bin_path):
+    norm = str(bin_path).replace("\\", "/")
+    lower = norm.lower()
+    for suffix in ("/bin/clang-cl.exe", "/bin/clang-cl", "/bin/clang.exe", "/bin/clang"):
+        if lower.endswith(suffix):
+            return norm[:-len(suffix)].rstrip("/")
+    return ""
+
 def _get_win_clang_root(repository_ctx):
     if get_host_environ(repository_ctx, "TF_WIN_CUDA_CLANG") != "1":
         return ""
     clang_bin = get_host_environ(repository_ctx, "CLANG_COMPILER_PATH")
     if clang_bin:
-        norm = clang_bin.replace("\\", "/")
-        if norm.lower().endswith("/bin/clang-cl.exe"):
-            return norm[:-len("/bin/clang-cl.exe")]
-        if norm.lower().endswith("/bin/clang.exe"):
-            return norm[:-len("/bin/clang.exe")]
-    llvm_root = get_host_environ(repository_ctx, "LLVM_PATH", "C:/tf/llvm").replace("\\", "/").rstrip("/")
-    if repository_ctx.path(llvm_root + "/bin/clang-cl.exe").exists:
-        return llvm_root
+        llvm_root = _extract_llvm_root_from_binary(clang_bin)
+        if llvm_root and repository_ctx.path(llvm_root + "/bin/clang-cl.exe").exists:
+            return llvm_root
+    for env_var in ("TF_LLVM_PATH", "LLVM_PATH", "BAZEL_LLVM"):
+        candidate = get_host_environ(repository_ctx, env_var)
+        if candidate:
+            llvm_root = candidate.replace("\\", "/").rstrip("/")
+            if repository_ctx.path(llvm_root + "/bin/clang-cl.exe").exists:
+                return llvm_root
+    clang_cl = repository_ctx.which("clang-cl.exe") or repository_ctx.which("clang-cl")
+    if clang_cl:
+        llvm_root = _extract_llvm_root_from_binary(clang_cl)
+        if llvm_root and repository_ctx.path(llvm_root + "/bin/clang-cl.exe").exists:
+            return llvm_root
+    default_llvm = "C:/Program Files/LLVM"
+    if repository_ctx.path(default_llvm + "/bin/clang-cl.exe").exists:
+        return default_llvm
     return ""
+
+def _clang_version_sort_key(path):
+    name = path.basename
+    parts = name.split(".")
+    if parts and all([p.isdigit() for p in parts]):
+        return (1, [int(p) for p in parts], name)
+    return (0, [], name)
 
 def _find_clang_resource_dir(repository_ctx, llvm_root):
     clang_lib_dir = repository_ctx.path(llvm_root + "/lib/clang")
     if clang_lib_dir.exists:
         entries = clang_lib_dir.readdir()
         if entries:
-            return str(entries[-1]).replace("\\", "/")
+            best = sorted(entries, key = _clang_version_sort_key)[-1]
+            return str(best).replace("\\", "/")
     return ""
 
 def _get_win_cuda_defines(repository_ctx):
@@ -275,7 +318,8 @@ def _get_win_cuda_defines(repository_ctx):
 
     cuda_root = (
         get_host_environ(repository_ctx, "LOCAL_CUDA_PATH") or
-        get_host_environ(repository_ctx, "CUDA_PATH") or ""
+        get_host_environ(repository_ctx, "CUDA_PATH") or
+        get_host_environ(repository_ctx, "CUDA_TOOLKIT_PATH") or ""
     )
     if cuda_root:
         cuda_win = cuda_root.replace("/", "\\").rstrip("\\").replace("\\", "\\\\")
@@ -358,6 +402,11 @@ def _get_clang_major_version(repository_ctx, cc):
 
 # Function works only in pair with non-hermetic toolchain
 def _get_cpu_compiler(repository_ctx):
+    if is_windows(repository_ctx):
+        if _get_win_clang_root(repository_ctx):
+            return "clang-cl"
+        return "msvc-cl"
+
     if _use_hermetic_toolchains(repository_ctx):
         return "clang"
 
@@ -410,6 +459,8 @@ def _py_tmpl_dict(d):
 
 def _cudart_static_linkopt(cpu_value):
     """Returns additional platform-specific linkopts for cudart."""
+    if cpu_value == "Windows":
+        return ""
     return "\"\"," if cpu_value == "Darwin" else "\"-lrt\","
 
 def _compute_capabilities(repository_ctx):
@@ -741,9 +792,49 @@ def _get_nvcc_path(repository_ctx):
         repository_ctx.attr.nvcc_binary.name,
     )
 
+def _get_win_python_bin(repository_ctx):
+    py_env = get_host_environ(repository_ctx, "PYTHON_BIN_PATH")
+    if py_env:
+        py_norm = py_env.replace("\\", "/")
+        if repository_ctx.path(py_norm).exists:
+            return py_norm
+
+    py_bin = get_python_bin(repository_ctx)
+    if py_bin and "windowsapps" not in str(py_bin).lower():
+        return str(py_bin).replace("\\", "/")
+
+    # Skip the Windows Store App Execution Alias stub under WindowsApps by
+    # scanning PATH manually and falling back to the Python Launcher (py.exe).
+    path_env = repository_ctx.os.environ.get("PATH", "")
+    for entry in path_env.split(";"):
+        clean = entry.strip().strip('"').replace("\\", "/").rstrip("/")
+        if not clean or "windowsapps" in clean.lower():
+            continue
+        for exe in ("python.exe", "python3.exe"):
+            candidate = clean + "/" + exe
+            if repository_ctx.path(candidate).exists:
+                return candidate
+
+    py_launcher = repository_ctx.which("py.exe")
+    if py_launcher:
+        res = repository_ctx.execute([str(py_launcher), "-3", "-c", "import sys; print(sys.executable)"])
+        if res.return_code == 0:
+            found = res.stdout.strip().replace("\\", "/")
+            if found and "windowsapps" not in found.lower() and repository_ctx.path(found).exists:
+                return found
+
+    if py_bin:
+        return str(py_bin).replace("\\", "/")
+    _auto_configure_fail(
+        "Could not find a usable Python interpreter for msvc_wrapper_for_nvcc.bat. " +
+        "Set PYTHON_BIN_PATH (e.g. --repo_env=PYTHON_BIN_PATH=C:/path/to/python.exe) " +
+        "or activate a Python environment before running Bazel.",
+    )
+
 def _create_nvcc_wrapper(repository_ctx, cc):
     cuda_config = _get_cuda_config(repository_ctx)
     win_cpu_compiler = str(cc)
+    llvm_root = ""
     if is_windows(repository_ctx):
         llvm_root = _get_win_clang_root(repository_ctx)
         if llvm_root:
@@ -752,6 +843,7 @@ def _create_nvcc_wrapper(repository_ctx, cc):
     wrapper_defines = {
         "%{cpu_compiler}": win_cpu_compiler,
         "%{msvc_cl_exe}": str(cc),
+        "%{llvm_root}": llvm_root,
         "%{cuda_version}": cuda_config.cuda_version,
         "%{nvcc_path}": _get_nvcc_path(repository_ctx),
         "%{gcc_host_compiler_path}": str(cc),
@@ -779,7 +871,7 @@ def _create_nvcc_wrapper(repository_ctx, cc):
         repository_ctx.file(
             "crosstool/windows/msvc_wrapper_for_nvcc.bat",
             "@echo off\r\n\"%s\" \"%%~dp0msvc_wrapper_for_nvcc.py\" %%*\r\n" %
-            get_python_bin(repository_ctx),
+            _get_win_python_bin(repository_ctx),
         )
 
 def _create_dummy_cuda_repository(repository_ctx):
@@ -972,7 +1064,7 @@ _TMPDIR = "TMPDIR"
 
 cuda_configure = repository_rule(
     implementation = _cuda_configure_impl,
-    environ = ["TF_NEED_CUDA", "HERMETIC_CUDA_VERSION", "TF_CUDA_VERSION", "HERMETIC_CUDNN_VERSION", "HERMETIC_CUDA_COMPUTE_CAPABILITIES", "LOCAL_CUDA_PATH", "LOCAL_CUDNN_PATH", "CUDA_PATH", "TF_WIN_CUDA_CLANG", "CLANG_COMPILER_PATH", "LLVM_PATH", "TF_NVCC_CLANG", "CUDA_NVCC", "BAZEL_VC", "BAZEL_VS"],
+    environ = ["TF_NEED_CUDA", "HERMETIC_CUDA_VERSION", "TF_CUDA_VERSION", "HERMETIC_CUDNN_VERSION", "HERMETIC_CUDA_COMPUTE_CAPABILITIES", "LOCAL_CUDA_PATH", "LOCAL_CUDNN_PATH", "CUDNN_PATH", "CUDA_PATH", "CUDA_TOOLKIT_PATH", "PYTHON_BIN_PATH", "TF_WIN_CUDA_CLANG", "CLANG_COMPILER_PATH", "TF_LLVM_PATH", "LLVM_PATH", "BAZEL_LLVM", "TF_NVCC_CLANG", "CUDA_NVCC", "BAZEL_VC", "BAZEL_VS"],
     attrs = {
         "environ": attr.string_dict(),
         "cccl_version": attr.label(default = Label("@cuda_cccl//:version.bzl")),

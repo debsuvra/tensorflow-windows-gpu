@@ -15,6 +15,7 @@
 """A Python wrapper that loads _pywrap_tensorflow_internal.so."""
 
 import ctypes
+import glob
 # importing hashlib to avoid a linkage issue. refer b/372709714
 import hashlib
 import os
@@ -59,16 +60,13 @@ if os.name == 'nt' and hasattr(os, 'add_dll_directory'):
     if _root:
       _win_dll_candidates.extend([
           os.path.join(_root, 'bin', 'x64'),
+          *sorted(
+              glob.glob(os.path.join(_root, 'bin', '*', 'x64')),
+              reverse=True,
+          ),
           os.path.join(_root, 'bin'),
           os.path.join(_root, 'lib', 'x64'),
       ])
-  _win_dll_candidates.extend([
-      r'C:\tf\cuda\bin\x64',
-      r'C:\tf\cuda\bin',
-      r'C:\tf\cuda\lib\x64',
-      r'C:\tf\cudnn\bin\x64',
-      r'C:\tf\cudnn\bin',
-  ])
   _seen_dirs = set()
   _path_additions = []
   _existing_path = {
@@ -78,13 +76,14 @@ if os.name == 'nt' and hasattr(os, 'add_dll_directory'):
   }
   for _d in _win_dll_candidates:
     _norm = os.path.normpath(_d)
-    if _norm not in _seen_dirs and os.path.isdir(_norm):
-      _seen_dirs.add(_norm)
+    _norm_key = os.path.normcase(_norm)
+    if _norm_key not in _seen_dirs and os.path.isdir(_norm):
+      _seen_dirs.add(_norm_key)
       try:
         _WIN_CUDA_DLL_HANDLES.append(os.add_dll_directory(_norm))
       except OSError:
         pass
-      if os.path.normcase(_norm) not in _existing_path:
+      if _norm_key not in _existing_path:
         _path_additions.append(_norm)
   if _path_additions:
     os.environ['PATH'] = (

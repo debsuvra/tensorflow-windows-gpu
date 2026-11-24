@@ -86,19 +86,35 @@ absl::Status ToStatus(cudnnStatus_t status, absl::string_view detail) {
 #ifdef _WIN32
 using CudnnGetPropertyFn = cudnnStatus_t (*)(libraryPropertyType, int*);
 static CudnnGetPropertyFn ResolveCudnnGetProperty() {
-  HMODULE mod = GetModuleHandleA("cudnn64_9.dll");
-  if (!mod) {
-    mod = LoadLibraryExA("cudnn64_9.dll", NULL,
-                         LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
-  }
-  if (!mod) {
-    mod = LoadLibraryA("cudnn64_9.dll");
-  }
-  if (!mod) {
+  static const CudnnGetPropertyFn fn = []() -> CudnnGetPropertyFn {
+    const std::string versioned_dll =
+        absl::StrCat("cudnn64_", CUDNN_MAJOR, ".dll");
+    const char* const dll_names[] = {versioned_dll.c_str(), "cudnn.dll"};
+    for (const char* dll_name : dll_names) {
+      HMODULE mod = GetModuleHandleA(dll_name);
+      bool loaded = false;
+      if (!mod) {
+        mod = LoadLibraryExA(dll_name, nullptr,
+                             LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        loaded = (mod != nullptr);
+      }
+      if (!mod) {
+        mod = LoadLibraryA(dll_name);
+        loaded = (mod != nullptr);
+      }
+      if (mod) {
+        if (auto sym = reinterpret_cast<CudnnGetPropertyFn>(
+                GetProcAddress(mod, "cudnnGetProperty"))) {
+          return sym;
+        }
+        if (loaded) {
+          FreeLibrary(mod);
+        }
+      }
+    }
     return nullptr;
-  }
-  return reinterpret_cast<CudnnGetPropertyFn>(
-      GetProcAddress(mod, "cudnnGetProperty"));
+  }();
+  return fn;
 }
 #else
 // cudnnGetProperty is forward declared as a weak symbol such that XLA-internal

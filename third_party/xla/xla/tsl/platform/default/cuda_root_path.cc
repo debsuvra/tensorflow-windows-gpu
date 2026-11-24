@@ -99,7 +99,6 @@ std::vector<std::string> CandidateCudaRoots() {
   if (local_cuda_path && *local_cuda_path) {
     roots.emplace_back(local_cuda_path);
   }
-  roots.emplace_back(std::string("C:/tf/cuda"));
 #endif
   std::string cuda_toolkit_path = TF_CUDA_TOOLKIT_PATH;
   if (!cuda_toolkit_path.empty()) {

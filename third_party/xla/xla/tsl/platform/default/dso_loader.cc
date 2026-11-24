@@ -80,15 +80,25 @@ absl::StatusOr<void*> GetDsoHandle(const std::string& name,
 absl::StatusOr<void*> GetWinCudaDsoHandle(
     const std::string& name, absl::string_view primary_version,
     std::initializer_list<absl::string_view> fallback_versions = {}) {
-  auto res = GetDsoHandle(name + "64_", primary_version);
-  if (res.ok()) return res;
+  absl::StatusOr<void*> primary_res = nullptr;
+  bool tried_primary = false;
+  if (!primary_version.empty()) {
+    primary_res = GetDsoHandle(name + "64_", primary_version);
+    if (primary_res.ok()) return primary_res;
+    tried_primary = true;
+  }
   for (auto ver : fallback_versions) {
+    if (ver.empty() || ver == primary_version) continue;
     auto fb = GetDsoHandle(name + "64_", ver);
     if (fb.ok()) return fb;
+    if (!tried_primary) {
+      primary_res = fb;
+      tried_primary = true;
+    }
   }
   auto legacy = GetDsoHandle(name, primary_version);
   if (legacy.ok()) return legacy;
-  return res;
+  return tried_primary ? primary_res : legacy;
 }
 #endif
 
@@ -117,7 +127,16 @@ absl::StatusOr<void*> GetNvmlDsoHandle() {
 
 absl::StatusOr<void*> GetNvrtcDsoHandle() {
 #if defined(PLATFORM_WINDOWS)
-  return GetWinCudaDsoHandle("nvrtc", "130_0", {GetCudaRtVersion(), "120_0"});
+  // On Windows, NVRTC DLLs follow nvrtc64_<major>0_0.dll (e.g.,
+  // nvrtc64_130_0.dll for CUDA 13.x, nvrtc64_120_0.dll for CUDA 12.x).
+  absl::string_view cudart_version = GetCudaRtVersion();
+  absl::string_view major = cudart_version.substr(0, cudart_version.find('.'));
+  if (!major.empty()) {
+    std::string nvrtc_version = absl::StrCat(major, "0_0");
+    return GetWinCudaDsoHandle("nvrtc", nvrtc_version,
+                               {cudart_version, "130_0", "120_0"});
+  }
+  return GetWinCudaDsoHandle("nvrtc", "130_0", {"120_0"});
 #else
   return GetDsoHandle("nvrtc", GetCudaRtVersion());
 #endif
@@ -173,7 +192,10 @@ absl::StatusOr<void*> GetCusparseDsoHandle() {
 
 absl::StatusOr<void*> GetCuptiDsoHandle() {
 #if defined(PLATFORM_WINDOWS)
-  auto status_or_handle = GetWinCudaDsoHandle("cupti", GetCuptiVersion(), {"12"});
+  // CUDA 13+ ships cupti64_<major>.dll (e.g., cupti64_13.dll); older Windows
+  // toolkits used date-versioned names (cupti64_<YYYY.M.P>.dll) or cupti.dll.
+  auto status_or_handle =
+      GetWinCudaDsoHandle("cupti", GetCuptiVersion(), {"13", "12"});
   if (status_or_handle.ok()) return status_or_handle;
   return GetDsoHandle("cupti", "");
 #else

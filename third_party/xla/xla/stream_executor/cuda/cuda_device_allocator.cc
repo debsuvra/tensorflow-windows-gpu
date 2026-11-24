@@ -118,11 +118,11 @@ absl::StatusOr<CudaDeviceAllocator::Options> QueryDeviceAllocatorOptions(
   };
 
   absl::Status status = try_query();
-  if (!status.ok() && fabric && posix_fd) {
+  if (!status.ok() && fabric) {
     XLA_LOG_DEVICE(WARNING, device)
-        << "Device allocator granularity query with FABRIC+POSIX_FD handle "
-           "types failed: "
-        << status << "; retrying without FABRIC.";
+        << "Device allocator granularity query with "
+        << (posix_fd ? "FABRIC+POSIX_FD handle types" : "FABRIC handle type")
+        << " failed: " << status << "; retrying without FABRIC.";
     fabric = false;
     status = try_query();
   }
@@ -181,7 +181,7 @@ static absl::StatusOr<CUmemGenericAllocationHandle> CreatePhysicalAllocation(
                       CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
 
   if (has_fabric) {
-    if (auto r = try_create("FABRIC+POSIX_FD")) {
+    if (auto r = try_create(has_posix_fd ? "FABRIC+POSIX_FD" : "FABRIC")) {
       return *r;
     }
     properties.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(
