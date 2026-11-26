@@ -22,19 +22,19 @@ This fork restores **full native Windows x86_64 CUDA GPU support** on top of mod
 
 ## Verified Native Windows GPU Execution
 
-Running directly on **Windows 11 x64 (no WSL2)** from a clean Python 3.13 virtual environment (`verify_gpu.py`):
+Running directly on **Windows 11 x64 (no WSL2)** in an interactive Python 3.13 session, with live `nvidia-smi` telemetry:
 
 <div align="center">
-  <img src="docs/assets/gpu-verification.png" alt="Native Windows 11 GPU verification output showing RTX 5090 detected, Eager MatMul, cuDNN 9 Conv2D, XLA JIT, Keras 3 training, and 223 TFLOPS FP16 throughput" width="820">
+  <img src="docs/assets/gpu-benchmark.png" alt="Native Windows 11 Python session on an RTX 5090 running 8192 x 8192 matmuls: 117.2 TFLOPS FP32 (TF32), 231.9 TFLOPS FP16 and 233.4 TFLOPS BF16, with live nvidia-smi power, SM clock and VRAM readings" width="640">
 </div>
 
 **8192 × 8192 MatMul throughput (RTX 5090, CUDA 13.5, cuDNN 9.28.1, native Windows 11):**
 
 | Precision | Mean Latency | Measured Throughput |
 | :--- | ---: | ---: |
-| `float32` | `9.65 ms` | **113.96 TFLOPS** |
-| `float16` | `4.93 ms` | **223.25 TFLOPS** |
-| `bfloat16` | `4.94 ms` | **222.66 TFLOPS** |
+| `float32` (TF32) | `9.38 ms` | **117.2 TFLOPS** |
+| `float16` | `4.74 ms` | **231.9 TFLOPS** |
+| `bfloat16` | `4.71 ms` | **233.4 TFLOPS** |
 
 ---
 
